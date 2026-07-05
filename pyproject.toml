@@ -48,6 +48,7 @@ echelon3-train = "echelon3.cli.train:main"
 echelon3-evaluate = "echelon3.cli.evaluate:main"
 echelon3-run = "echelon3.cli.run:main"
 echelon3-export = "echelon3.cli.export:main"
+echelon3-finetune = "echelon3.cli.finetune:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -42,7 +42,7 @@ echelon2 codebase and cleaned up:
 - Nets: `ClassifierNet` / `Segmenter` composition wrappers, timm backbone
   adapter, DDRNet, SegFormer-style heads, DASPP/PSP/FPN necks, CDC layers.
 - Checkpoint manager, tensorboard mlops logger, weight loaders (full/partial),
-  CLI entry points `echelon3-train` / `echelon3-evaluate` / `echelon3-run`
+  CLI entry points `echelon3-train` / `echelon3-evaluate` / `echelon3-run` / `echelon3-export` / `echelon3-finetune`
   (Hydra, `--config-dir`).
 - Smoke example: synthetic dataset generator + minimal classifier config.
 
