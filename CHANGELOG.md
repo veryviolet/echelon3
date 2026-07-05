@@ -4,6 +4,15 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.3.0 — 2026-07-05
+
+### Added
+
+- `echelon3-finetune` CLI: warm-start from a checkpoint (`init_from`), freezing
+  by regex patterns (`finetune.freeze_patterns`), head-only training and
+  per-layer parameter groups (`finetune.param_groups`). With none of those
+  blocks present it behaves exactly like `echelon3-train`.
+
 ## 0.2.0 — 2026-07-05
 
 ### Added
@@ -42,7 +51,7 @@ echelon2 codebase and cleaned up:
 - Nets: `ClassifierNet` / `Segmenter` composition wrappers, timm backbone
   adapter, DDRNet, SegFormer-style heads, DASPP/PSP/FPN necks, CDC layers.
 - Checkpoint manager, tensorboard mlops logger, weight loaders (full/partial),
-  CLI entry points `echelon3-train` / `echelon3-evaluate` / `echelon3-run` / `echelon3-export` / `echelon3-finetune`
+  CLI entry points `echelon3-train` / `echelon3-evaluate` / `echelon3-run`
   (Hydra, `--config-dir`).
 - Smoke example: synthetic dataset generator + minimal classifier config.
 
