@@ -4,6 +4,23 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.2.0 — 2026-07-05
+
+### Added
+
+- ONNX export: `ModelExporter` base + `OnnxExporter`
+  (preprocess → net → postprocess wrapped into a single graph),
+  `echelon3-export` CLI, export section in the smoke example, CI step
+  exporting the smoke model and verifying it with onnxruntime.
+- All CLIs insert the current working directory into `sys.path`, so zoo
+  repositories can reference their local packages from configs
+  (`module: my_zoo.nets.foo`) when running from the repo root.
+
+### Fixed
+
+- `create_exporters` instantiated `torch.nn.Identity` incorrectly when no
+  preprocess/postprocess is configured.
+
 ## 0.1.0 — 2026-07-05
 
 First public release. Core of the framework extracted from the internal
