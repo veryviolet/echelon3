@@ -78,3 +78,23 @@ jobs:
           assert final > 0.85, f'final accuracy {final} <= 0.85'
           print('final smoke accuracy:', final)
           PY
+
+      - name: smoke — export to ONNX and run onnxruntime
+        run: |
+          .venv-test/bin/pip install --quiet onnx onnxruntime
+          SMOKE_TARGET=/tmp/smoke_target \
+            .venv-test/bin/echelon3-export --config-dir examples/configs --config-name smoke
+          test -f /tmp/smoke_target/smoke.onnx
+          .venv-test/bin/python - <<'PY'
+          import onnxruntime as ort, numpy as np, cv2, glob
+          sess = ort.InferenceSession('/tmp/smoke_target/smoke.onnx')
+          correct = total = 0
+          for cls in (0, 1):
+              for f in sorted(glob.glob(f'/tmp/smoke_data/test/{cls}/*.png'))[:16]:
+                  img = cv2.cvtColor(cv2.imread(f), cv2.COLOR_BGR2RGB)
+                  x = img.transpose(2, 0, 1)[np.newaxis].astype(np.uint8)
+                  correct += int(sess.run(None, {'images': x})[0].argmax()) == cls
+                  total += 1
+          print(f'onnxruntime accuracy: {correct}/{total}')
+          assert correct / total > 0.85
+          PY

@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
+from echelon3.cli import add_cwd_to_sys_path
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
 from echelon3.creator import create_net, create_loss, create_optimizer, create_scheduler, create_checkpoint_manager
@@ -177,6 +178,7 @@ def trainer_app(cfg: DictConfig):
 
 
 def main():
+    add_cwd_to_sys_path()
     trainer_app()
 
 

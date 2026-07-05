@@ -122,3 +122,21 @@ trainer:
 target:
   path: ${oc.env:SMOKE_TARGET,./targets/smoke}
   checkpoints_to_keep: 2
+
+export:
+  preprocess:
+    to01:
+      name: to01
+      module: echelon3.transforms.preprocess.basic
+      type: To01
+  exporters:
+    onnx:
+      module: echelon3.exporters.onnx
+      type: OnnxExporter
+      config:
+        target: ${oc.env:SMOKE_TARGET,./targets/smoke}/smoke.onnx
+        input_names: [images]
+        output_names: [logits]
+        input_shape: [1, 3, 64, 64]
+        use_tracing: true
+        opset: 18

@@ -8,6 +8,7 @@ from colorama import Fore, Style
 
 from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
+from echelon3.cli import add_cwd_to_sys_path
 
 from echelon3.creator import (
     create_single_augment,
@@ -130,6 +131,7 @@ def evaluate_app(cfg: DictConfig):
 
 
 def main():
+    add_cwd_to_sys_path()
     evaluate_app()
 
 

@@ -7,18 +7,17 @@ from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
 from echelon3.cli import add_cwd_to_sys_path
 
-from echelon3.creator import create_net, create_checkpoint_manager
-from echelon3.creator import create_single_preprocess, create_universal, create_wrapper
+from echelon3.creator import create_net, create_checkpoint_manager, create_exporters
 
 
 @hydra.main(version_base=None, config_path=None)
-def runner_app(cfg: DictConfig):
+def exporter_app(cfg: DictConfig):
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
 
     print(Fore.CYAN)
 
-    print(f'\n\n{__title__} {__version__}: runner.\n\n')
+    print(f'\n\n{__title__} {__version__}: exporter.\n\n')
 
     print(f'--> Initializing network... ')
     net = create_net(cfg.net)
@@ -36,42 +35,36 @@ def runner_app(cfg: DictConfig):
 
         print(f'--> Loading latest checkpoint... ')
         print(Fore.LIGHTGREEN_EX, end='')
-        ckpt, num = ckpt_manager.load_latest_checkpoint()
+        ckpt, num = ckpt_manager.load_latest_checkpoint(cpu_only=True)
         try:
             net.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
         except Exception:
+            # чекпоинт формата DataParallel/DDP (ключи с префиксом module.)
             newnet = torch.nn.DataParallel(net)
             newnet.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
 
-        net.to(device)
-        net.eval()
         print(f'--> Loaded {num} checkpoint. ')
         print(Fore.CYAN, end='')
     else:
         print(f'--> No target specified. Omitting checkpoint loading. ')
 
-    print(f'--> Creating preprocess... ')
-    preprocess = create_single_preprocess(cfg.export.preprocess) if 'preprocess' in cfg.export.keys() else torch.nn.Identity()
-    preprocess = preprocess.to(device)
-    print(f'--> Creating postprocess... ')
-    postprocess = create_single_preprocess(cfg.export.postprocess) if 'postprocess' in cfg.export.keys() else torch.nn.Identity()
-    postprocess = postprocess.to(device)
+    print(f'--> Creating exporters... ')
+    exporters = create_exporters(cfg.export, net=net)
+    print(Fore.LIGHTGREEN_EX, end='')
+    for name, ex in exporters.items():
+        print(f'        {name}: {type(ex).__name__}')
+    print(Fore.CYAN, end='')
 
-    print(f'--> Creating wrapper... ')
-    net = create_wrapper(cfg.export.wrapper, net) if 'wrapper' in cfg.export.keys() else net
-
-    print(f'--> Creating runner... ')
-    runner = create_universal(cfg.runner)
-
-    print(f'--> Processing ... ')
-    runner.process(model=net, preprocess=preprocess, postprocess=postprocess)
+    for name, ex in exporters.items():
+        print(f'--> Exporting {name}... ')
+        ex.export()
 
     print(Style.RESET_ALL)
 
 
 def main():
     add_cwd_to_sys_path()
-    runner_app()
+    exporter_app()
 
 
 if __name__ == "__main__":

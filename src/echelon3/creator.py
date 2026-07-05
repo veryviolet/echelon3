@@ -333,8 +333,8 @@ def create_wrapper(config: DictConfig, net):
 
 def create_exporters(config, net):
 
-    preprocess = create_single_preprocess(config.preprocess) if 'preprocess' in config.keys() else torch.nn.Identity
-    postprocess = create_single_preprocess(config.postprocess) if 'postprocess' in config.keys() else torch.nn.Identity
+    preprocess = create_single_preprocess(config.preprocess) if 'preprocess' in config.keys() else torch.nn.Identity()
+    postprocess = create_single_preprocess(config.postprocess) if 'postprocess' in config.keys() else torch.nn.Identity()
 
     exporters = {}
 
