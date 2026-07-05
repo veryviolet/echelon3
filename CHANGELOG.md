@@ -2,11 +2,11 @@
 
 All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
-follow [SemVer](https://semver.org/) once 3.0.0 ships.
+follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
-## 3.0.0a0 — 2026-07-05
+## 0.1.0 — 2026-07-05
 
-First public alpha. Core of the framework extracted from the internal
+First public release. Core of the framework extracted from the internal
 echelon2 codebase and cleaned up:
 
 ### Added
