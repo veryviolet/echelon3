@@ -1,0 +1,124 @@
+hydra:
+  job:
+    chdir: False
+
+defaults:
+  - _self_
+
+device: cuda
+device_ids: [0]
+
+net:
+  module: echelon3.nets.classifier
+  type: ClassifierNet
+  config:
+    backbone:
+      module: timm
+      type: create_model
+      config:
+        model_name: mobilenetv3_small_100
+        pretrained: false
+        num_classes: 0
+    head:
+      module: echelon3.nets.heads.classifier_heads
+      type: DenseClassifierHead
+      config:
+        num_classes: 2
+        num_features: 1024
+        dropout: 0.1
+        activation:
+          module: torch.nn
+          type: Identity
+
+data:
+  train:
+    module: echelon3.data.imageclassifier
+    type: FoldersHiveImageClassifierDataset
+    config:
+      classes: 2
+      folder: ${oc.env:SMOKE_DATA_ROOT,./smoke_data}/train
+      wildcards: ['*.png']
+  test:
+    module: echelon3.data.imageclassifier
+    type: FoldersHiveImageClassifierDataset
+    config:
+      classes: 2
+      folder: ${oc.env:SMOKE_DATA_ROOT,./smoke_data}/test
+      wildcards: ['*.png']
+
+transform:
+  train:
+    preprocess:
+      to01:
+        name: to01
+        module: echelon3.transforms.preprocess.basic
+        type: To01
+  test:
+    preprocess:
+      to01:
+        name: to01
+        module: echelon3.transforms.preprocess.basic
+        type: To01
+
+loss:
+  - ce:
+      module: echelon3.losses.classification
+      type: WeightedCrossEntropyLoss
+      weight: 1.0
+      config:
+        weight: [1.0, 1.0]
+
+metrics:
+  - accuracy:
+      module: torchmetrics
+      type: Accuracy
+      config:
+        task: multiclass
+        num_classes: 2
+
+dataloaders:
+  train:
+    module: torch.utils.data
+    type: DataLoader
+    config:
+      batch_size: 16
+      shuffle: true
+      num_workers: 2
+      drop_last: true
+  test:
+    module: torch.utils.data
+    type: DataLoader
+    config:
+      batch_size: 16
+      shuffle: false
+      num_workers: 2
+
+optimizer:
+  module: torch.optim
+  type: AdamW
+  config:
+    lr: 0.001
+
+scheduler:
+  module: torch.optim.lr_scheduler
+  type: LinearLR
+  config:
+    start_factor: 1.0
+    end_factor: 1.0
+    total_iters: 1
+
+trainer:
+  module: echelon3.trainers.baseline
+  type: Trainer
+  config:
+    epochs: 6
+    keep_best_on:
+      accuracy:
+        mode: directional
+        value: high
+    times_to_validate_per_epoch: 1
+    high_is_better: true
+
+target:
+  path: ${oc.env:SMOKE_TARGET,./targets/smoke}
+  checkpoints_to_keep: 2

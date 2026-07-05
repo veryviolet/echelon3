@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    name: build wheel + smoke-train on CPU
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install uv
+        run: pip install --quiet uv
+
+      - name: build wheel + sdist
+        run: uv build
+
+      - name: install wheel into clean venv (CPU torch)
+        run: |
+          uv venv .venv-test --python ${{ matrix.python-version }} --seed
+          # CPU-колёса torch: на runner нет GPU, а CUDA-сборка весит гигабайты
+          .venv-test/bin/pip install --quiet torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+          .venv-test/bin/pip install --quiet dist/*.whl
+
+      - name: smoke — every module imports
+        run: |
+          .venv-test/bin/python - <<'PY'
+          import pkgutil, importlib
+          import echelon3
+          failed = []
+          for m in pkgutil.walk_packages(echelon3.__path__, prefix='echelon3.'):
+              try:
+                  importlib.import_module(m.name)
+              except Exception as e:
+                  failed.append((m.name, repr(e)))
+          assert not failed, failed
+          print('all modules import OK, version', echelon3.__version__)
+          PY
+
+      - name: smoke — CLI entry points respond
+        run: |
+          .venv-test/bin/echelon3-train --help > /dev/null
+          .venv-test/bin/echelon3-evaluate --help > /dev/null
+          .venv-test/bin/echelon3-run --help > /dev/null
+
+      - name: smoke — train a classifier on synthetic data (CPU)
+        run: |
+          .venv-test/bin/python examples/gen_smoke_data.py --root /tmp/smoke_data
+          SMOKE_DATA_ROOT=/tmp/smoke_data SMOKE_TARGET=/tmp/smoke_target \
+            .venv-test/bin/echelon3-train --config-dir examples/configs --config-name smoke \
+            | tee /tmp/smoke.log
+          test -f /tmp/smoke_target/checkpoint-1.tar
+          # финальная accuracy на разделимой синтетике должна быть >0.9
+          .venv-test/bin/python - <<'PY'
+          import re
+          text = open('/tmp/smoke.log').read()
+          accs = re.findall(r'accuracy=tensor\(([0-9.]+)', text)
+          assert accs, 'no accuracy lines in train log'
+          final = float(accs[-1])
+          assert final > 0.9, f'final accuracy {final} <= 0.9'
+          print('final smoke accuracy:', final)
+          PY

@@ -1,0 +1,15 @@
+*.pyc
+__pycache__/
+*.tar
+*.pt
+*.pth
+*.onnx
+*.onnx.data
+*.log
+outputs/
+targets/
+exports/
+.venv/
+.idea/
+dist/
+*.egg-info/
