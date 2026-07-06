@@ -225,7 +225,7 @@ class GrayscaleCLAHE(torch.nn.Module):
     Applied symmetrically to base & query via transform.preprocess (the dataset runs
     preprocess on both inputs), deterministically. I/O: CHW float in [0, 255] — place
     BEFORE Normalize. Cross-provider differences are mostly colour/brightness; this makes
-    the input provider-invariant. Mirror it at inference time (raven.py).
+    the input provider-invariant. Mirror it at inference time.
     """
 
     def __init__(self, clahe: bool = True, clip: float = 2.0, grid: int = 8, **kwargs):

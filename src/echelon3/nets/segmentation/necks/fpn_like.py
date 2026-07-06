@@ -4,7 +4,7 @@ Takes a list of multi-scale feature maps (timm `features_only` style) and fuses
 them by projecting each to a common `out_channels` and summing on the largest
 spatial size (the first feature). Output: single tensor (B, out_channels, H, W).
 
-Cheap enough for RK3588 single-NPU deployment: 4 × 1x1 convs + 3 bilinear
+Cheap enough for single-NPU edge deployment: 4 × 1x1 convs + 3 bilinear
 upsamples + 3 adds, ~50–200K params depending on in_channels.
 """
 from __future__ import annotations

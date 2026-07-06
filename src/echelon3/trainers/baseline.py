@@ -133,8 +133,8 @@ class Trainer:
         self._device = device
         if ddp.is_ddp():
             # DDP: один процесс = один GPU. Сеть должна быть на устройстве ДО обёртки.
-            # find_unused_parameters=True по умолчанию: у imim-сетей часть выходов
-            # (features/presence) может не участвовать в лоссе на отдельных шагах.
+            # find_unused_parameters=True по умолчанию: у некоторых сетей часть
+            # выходов может не участвовать в лоссе на отдельных шагах.
             net = net.to(device)
             self._net = torch.nn.parallel.DistributedDataParallel(
                 net,

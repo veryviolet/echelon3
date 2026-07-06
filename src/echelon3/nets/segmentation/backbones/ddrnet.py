@@ -7,7 +7,7 @@ fused high-resolution feature map (1/8 of input, 64 channels for the slim
 variant). The MultiBinarySegmenter then runs its per-head 1x1 conv on this
 and bilinear-upsamples to input resolution.
 
-INT8 RKNN friendly: only conv/BN/ReLU/AvgPool/AdaptiveAvgPool/bilinear-upsample
+INT8-quantization friendly: only conv/BN/ReLU/AvgPool/AdaptiveAvgPool/bilinear-upsample
 operators. ~5.7M params for the slim variant (planes=32).
 
 `forward` returns a list of length 1 (the fused feature) so it stays
