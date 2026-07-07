@@ -1,0 +1,2359 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Config-driven PyTorch training framework — assemble nets, data, losses and trainers from YAML.">
+      
+      
+      
+        <link rel="canonical" href="https://veryviolet.github.io/echelon3/reference/components/">
+      
+      
+        <link rel="prev" href="../config-schema/">
+      
+      
+        <link rel="next" href="../cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Built-in Components - echelon3</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#built-in-components" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="echelon3" class="md-header__button md-logo" aria-label="echelon3" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            echelon3
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Built-in Components
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/veryviolet/echelon3" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    veryviolet/echelon3
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/how-it-works/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/extending/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../config-schema/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="echelon3" class="md-nav__button md-logo" aria-label="echelon3" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    echelon3
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/veryviolet/echelon3" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    veryviolet/echelon3
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/first-run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/how-it-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How It Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/run-anatomy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anatomy of a Run
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/extending/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extending with Your Own Code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/ddp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU (DDP)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exporting to ONNX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Built-in Components
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Built-in Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#datasets-module-echelon3data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Datasets — module: echelon3.data.*
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Datasets — module: echelon3.data.*">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-filters-module-echelon3datafilters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File filters — module: echelon3.data.filters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dataloaders-module-echelon3dataloaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DataLoaders — module: echelon3.dataloaders.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transforms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Transforms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preprocess-module-echelon3transformspreprocessbasic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocess — module: echelon3.transforms.preprocess.basic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#augment-module-echelon3transformsaugmentcustom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Augment — module: echelon3.transforms.augment.custom
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#losses-module-echelon3losses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Losses — module: echelon3.losses.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-module-echelon3metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics — module: echelon3.metrics.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networks-module-echelon3nets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Networks — module: echelon3.nets.*
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Networks — module: echelon3.nets.*">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#assemblable-nets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assemblable nets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classifier-heads-module-echelon3netsheadsclassifier_heads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classifier heads — module: echelon3.nets.heads.classifier_heads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layers-module-echelon3netslayerscdc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layers — module: echelon3.nets.layers.cdc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#segmentation-building-blocks-module-echelon3netssegmentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segmentation building blocks — module: echelon3.nets.segmentation.*
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trainers-module-echelon3trainers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trainers — module: echelon3.trainers.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizers-module-echelon3optimizerssam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizers — module: echelon3.optimizers.sam
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#weight-loaders-module-echelon3weightloaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weight loaders — module: echelon3.weightloaders.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporters-module-echelon3exporters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporters — module: echelon3.exporters.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loggers-module-echelon3mlopstensorboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loggers — module: echelon3.mlops.tensorboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runners-module-echelon3runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runners — module: echelon3.runners.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wrappers-module-echelon3wrappersspatial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wrappers — module: echelon3.wrappers.spatial
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluators-module-echelon3evaluators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluators — module: echelon3.evaluators.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#datasets-module-echelon3data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Datasets — module: echelon3.data.*
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Datasets — module: echelon3.data.*">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-filters-module-echelon3datafilters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File filters — module: echelon3.data.filters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dataloaders-module-echelon3dataloaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DataLoaders — module: echelon3.dataloaders.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transforms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Transforms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preprocess-module-echelon3transformspreprocessbasic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preprocess — module: echelon3.transforms.preprocess.basic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#augment-module-echelon3transformsaugmentcustom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Augment — module: echelon3.transforms.augment.custom
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#losses-module-echelon3losses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Losses — module: echelon3.losses.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-module-echelon3metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics — module: echelon3.metrics.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networks-module-echelon3nets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Networks — module: echelon3.nets.*
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Networks — module: echelon3.nets.*">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#assemblable-nets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assemblable nets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classifier-heads-module-echelon3netsheadsclassifier_heads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classifier heads — module: echelon3.nets.heads.classifier_heads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layers-module-echelon3netslayerscdc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layers — module: echelon3.nets.layers.cdc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#segmentation-building-blocks-module-echelon3netssegmentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Segmentation building blocks — module: echelon3.nets.segmentation.*
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trainers-module-echelon3trainers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trainers — module: echelon3.trainers.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizers-module-echelon3optimizerssam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizers — module: echelon3.optimizers.sam
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#weight-loaders-module-echelon3weightloaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weight loaders — module: echelon3.weightloaders.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporters-module-echelon3exporters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporters — module: echelon3.exporters.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loggers-module-echelon3mlopstensorboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loggers — module: echelon3.mlops.tensorboard
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runners-module-echelon3runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runners — module: echelon3.runners.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wrappers-module-echelon3wrappersspatial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wrappers — module: echelon3.wrappers.spatial
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluators-module-echelon3evaluators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluators — module: echelon3.evaluators.*
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="built-in-components">Built-in Components<a class="headerlink" href="#built-in-components" title="Permanent link">&para;</a></h1>
+<p>This is the catalog of classes that ship with the <code>echelon3</code> package — the
+values you can put in a <code>module:</code> / <code>type:</code> triple without any zoo repository or
+custom code. Anything importable also works (e.g. <code>torch.optim.AdamW</code>,
+<code>torchmetrics.Accuracy</code>, <code>albumentations.HorizontalFlip</code>, <code>timm.create_model</code>);
+this page covers only what lives inside <code>echelon3</code>.</p>
+<p>Each <code>config</code> block becomes constructor kwargs, so the "key config" columns list
+the notable arguments — see the source for the full signature.</p>
+<div class="admonition note">
+<p class="admonition-title">Optional extras</p>
+<p>A few components need extra dependencies:
+<code>pip install echelon3[sam]</code> (SAM optimizer, MosaicML),
+<code>echelon3[smp]</code> (Lovász loss and the PSP neck, segmentation-models-pytorch),
+<code>echelon3[export]</code> (ONNX export). Install with the bracketed extra to use them.</p>
+</div>
+<h2 id="datasets-module-echelon3data">Datasets — <code>module: echelon3.data.*</code><a class="headerlink" href="#datasets-module-echelon3data" title="Permanent link">&para;</a></h2>
+<p>All datasets subclass <code>basic.BasicDataset</code>; they read HWC uint8 images with
+OpenCV, run <code>augment</code> then <code>preprocess</code>, and return <code>(tensor, label)</code>.</p>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.data.imageclassifier</code></td>
+<td><code>FoldersHiveImageClassifierDataset</code></td>
+<td>Class-per-subfolder classifier data (<code>folder/&lt;class_id&gt;/**/*.png</code>).</td>
+</tr>
+<tr>
+<td><code>echelon3.data.imageclassifier</code></td>
+<td><code>DataFrameImageClassifierDataset</code></td>
+<td>Classifier data from a CSV of filename/label columns.</td>
+</tr>
+<tr>
+<td><code>echelon3.data.imageclassifier</code></td>
+<td><code>FolderWithFixedLabelDataset</code></td>
+<td>All files under one folder, all assigned a single <code>fixed_label</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.data.image2image</code></td>
+<td><code>ImageSegmentationDataset</code></td>
+<td>Image + mask pairs for semantic segmentation (optional <code>class_colors</code>).</td>
+</tr>
+<tr>
+<td><code>echelon3.data.detection</code></td>
+<td><code>DetectionDataset</code></td>
+<td>Image + annotation pairs; <code>bboxes_type</code> ∈ <code>yolo</code>/<code>coco</code>/<code>pascal_voc</code>/<code>albumentations</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.data.multihead</code></td>
+<td><code>MultiBinarySegDataset</code></td>
+<td>Multi-binary-head segmentation: image + <code>{head_name: mask}</code>; missing head → all-ignore.</td>
+</tr>
+<tr>
+<td><code>echelon3.data.multihead</code></td>
+<td><code>MultiBinarySegConcatDataset</code></td>
+<td>Concatenation of several <code>MultiBinarySegDataset</code>s.</td>
+</tr>
+<tr>
+<td><code>echelon3.data.basic</code></td>
+<td><code>MultiPartDataset</code></td>
+<td>Weighted mixture of sub-datasets by <code>share</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.data.basic</code></td>
+<td><code>ClasswiseDataset</code></td>
+<td>One sub-dataset per class, indexed as <code>(class, i)</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>basic</code> module also exports the base classes (<code>BasicDataset</code>,
+<code>FilesDataset</code>, <code>AllFilesDataset</code>, <code>PerClassFilesDataset</code>) you subclass when
+writing your own dataset.</p>
+<h3 id="file-filters-module-echelon3datafilters">File filters — <code>module: echelon3.data.filters</code><a class="headerlink" href="#file-filters-module-echelon3datafilters" title="Permanent link">&para;</a></h3>
+<p>Optional <code>filter:</code> triple on a <code>FilesDataset</code> config that drops files at
+collection time.</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OrientationFilter</code></td>
+<td>Keep only <code>portrait</code> or <code>landscape</code> images (by aspect ratio).</td>
+</tr>
+<tr>
+<td><code>BaseFilter</code></td>
+<td>Base class for custom filters (<code>check_file(filename) -&gt; bool</code>).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dataloaders-module-echelon3dataloaders">DataLoaders — <code>module: echelon3.dataloaders.*</code><a class="headerlink" href="#dataloaders-module-echelon3dataloaders" title="Permanent link">&para;</a></h2>
+<p>Drop-in replacements for <code>torch.utils.data.DataLoader</code> in the <code>dataloaders</code>
+section.</p>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.dataloaders.balance</code></td>
+<td><code>BalancedDataLoader</code></td>
+<td>Class-balanced batches from a <code>PerClassFilesDataset</code> (each batch has equal per-class quotas).</td>
+</tr>
+<tr>
+<td><code>echelon3.dataloaders.classwise</code></td>
+<td><code>ClasswiseDataLoader</code></td>
+<td>Batches drawn from a <code>ClasswiseDataset</code> with a configurable per-class batch sampler.</td>
+</tr>
+<tr>
+<td><code>echelon3.dataloaders.multipart</code></td>
+<td><code>MultiPartDataLoader</code></td>
+<td>Interleaves parts of a <code>MultiPartDataset</code> by their configured shares.</td>
+</tr>
+<tr>
+<td><code>echelon3.dataloaders.varloader</code></td>
+<td><code>VariableDataLoader</code></td>
+<td><code>DataLoader</code> with a tuple collate for variable-length samples (e.g. detection).</td>
+</tr>
+</tbody>
+</table>
+<p>Matching batch samplers (<code>BalancedBatchSampler</code>, <code>ClasswiseBatchSampler</code>,
+<code>MultiPartBatchSampler</code>) live in the same modules.</p>
+<h2 id="transforms">Transforms<a class="headerlink" href="#transforms" title="Permanent link">&para;</a></h2>
+<h3 id="preprocess-module-echelon3transformspreprocessbasic">Preprocess — <code>module: echelon3.transforms.preprocess.basic</code><a class="headerlink" href="#preprocess-module-echelon3transformspreprocessbasic" title="Permanent link">&para;</a></h3>
+<p><code>torch.nn.Module</code>s composed into a <code>Sequential</code> and run on the CHW tensor after
+augmentation. Every entry needs a <code>name</code> in the config.</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>To01</code></td>
+<td>Cast to float and divide by 255 → <code>[0, 1]</code>.</td>
+</tr>
+<tr>
+<td><code>Normalize</code></td>
+<td>Subtract <code>mean</code>, divide by <code>std</code> (both scaled by <code>max_pixel</code>).</td>
+</tr>
+<tr>
+<td><code>ToCHW</code> / <code>ToHWC</code></td>
+<td>Permute channel order for a batched tensor.</td>
+</tr>
+<tr>
+<td><code>PatchesToCHW</code></td>
+<td>Permute patch tensors <code>(B, N, H, W, C) -&gt; (B, N, C, H, W)</code>.</td>
+</tr>
+<tr>
+<td><code>ToTensor</code></td>
+<td><code>numpy</code> HWC → CHW tensor.</td>
+</tr>
+<tr>
+<td><code>Resize</code></td>
+<td>Resize to a fixed <code>size</code> with a chosen <code>interpolation</code>.</td>
+</tr>
+<tr>
+<td><code>SmallestMaxSize</code></td>
+<td>Resize so the shortest side equals <code>max_size</code>, keeping aspect ratio.</td>
+</tr>
+<tr>
+<td><code>CropToAspectRatio</code></td>
+<td>Center-crop to a target height/width aspect ratio.</td>
+</tr>
+<tr>
+<td><code>ToGrayscale</code></td>
+<td>RGB → grayscale (returned as 3 channels).</td>
+</tr>
+<tr>
+<td><code>GrayscaleCLAHE</code></td>
+<td>Grayscale + optional CLAHE for provider-invariant appearance.</td>
+</tr>
+<tr>
+<td><code>Squeeze</code></td>
+<td>Drop a dimension.</td>
+</tr>
+<tr>
+<td><code>Decode</code></td>
+<td>Decode an encoded image tensor with <code>torchvision.io</code>.</td>
+</tr>
+<tr>
+<td><code>ScoreFromLogits</code></td>
+<td>Softmax then pick one class score (useful as export postprocess).</td>
+</tr>
+<tr>
+<td><code>Id</code></td>
+<td>Identity passthrough.</td>
+</tr>
+</tbody>
+</table>
+<p><code>module: echelon3.transforms.preprocess.segmentation</code> adds <code>ToSegmentationMask</code>
+(argmax → uint8 mask) and <code>ToBinarySegmentationMask</code> (sigmoid + threshold),
+typically used as export/runner postprocess.</p>
+<h3 id="augment-module-echelon3transformsaugmentcustom">Augment — <code>module: echelon3.transforms.augment.custom</code><a class="headerlink" href="#augment-module-echelon3transformsaugmentcustom" title="Permanent link">&para;</a></h3>
+<p>Custom <a href="https://albumentations.ai/">albumentations</a> transforms (use alongside
+the stock albumentations catalog). <code>ToTensorV2</code> is appended automatically.</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CropToAspectRatio</code> / <code>CropToAspectRatioV1</code></td>
+<td>Aspect-ratio crop (V1 adds random vertical/horizontal deviation).</td>
+</tr>
+<tr>
+<td><code>CenterCrop512x512</code></td>
+<td>Fixed 512×512 center crop.</td>
+</tr>
+<tr>
+<td><code>RandomSquareCropAndFill</code></td>
+<td>Erase random square patches (cutout-style).</td>
+</tr>
+<tr>
+<td><code>FrequencyNoiseAddition</code></td>
+<td>Add noise in the Fourier domain.</td>
+</tr>
+<tr>
+<td><code>FrequencyFilter</code></td>
+<td>Low-/high-pass frequency filtering.</td>
+</tr>
+<tr>
+<td><code>Moire</code></td>
+<td>Synthetic moiré pattern artifact.</td>
+</tr>
+<tr>
+<td><code>AspectPreservingDownscaleUpscale</code></td>
+<td>Downscale then upscale to simulate resolution loss.</td>
+</tr>
+<tr>
+<td><code>To01</code> / <code>From01</code></td>
+<td>Scale to/from <code>[0, 1]</code> inside the albumentations pipeline.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="losses-module-echelon3losses">Losses — <code>module: echelon3.losses.*</code><a class="headerlink" href="#losses-module-echelon3losses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.losses.classification</code></td>
+<td><code>WeightedCrossEntropyLoss</code></td>
+<td>Cross-entropy with per-class <code>weight</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.classification</code></td>
+<td><code>FixedMarginCrossEntropyLoss</code></td>
+<td>Cross-entropy with a fixed additive margin on class <code>idx</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.classification</code></td>
+<td><code>WMV_Ur_Loss</code></td>
+<td>Pairwise ranking loss between positive/negative scores.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.label_smoothed</code></td>
+<td><code>LabelSmoothedWeightedCrossEntropyLoss</code></td>
+<td>Weighted CE exposing <code>label_smoothing</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.segmentation</code></td>
+<td><code>CrossEntropy2D</code></td>
+<td>Per-pixel cross-entropy.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.segmentation</code></td>
+<td><code>OhemCELoss</code></td>
+<td>Online hard-example-mining cross-entropy.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.segmentation</code></td>
+<td><code>SoftmaxFocalLoss</code></td>
+<td>Focal loss over softmax for segmentation.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.segmentation</code></td>
+<td><code>RescaledSegLoss</code></td>
+<td>Wraps another loss, resizing labels to the logits' resolution.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.boundary</code></td>
+<td><code>MultiHeadBoundaryWithIgnore</code></td>
+<td>Sobel-based boundary F1 loss for thin structures (multi-head).</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.cldice</code></td>
+<td><code>MultiHeadSoftCLDiceWithIgnore</code></td>
+<td>Centerline-Dice topology loss for tubular structures (multi-head).</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.multibinary</code></td>
+<td><code>MultiHeadBCEWithIgnore</code></td>
+<td>Per-head BCE-with-logits, masking <code>ignore_index</code>.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.multibinary</code></td>
+<td><code>MultiHeadLovaszWithIgnore</code></td>
+<td>Per-head binary Lovász hinge (needs <code>echelon3[smp]</code>).</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.aux_heads</code></td>
+<td><code>MultiHeadAuxEdgeBCE</code></td>
+<td>BCE on auxiliary edge heads.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.aux_heads</code></td>
+<td><code>MultiHeadAuxCenterlineBCE</code></td>
+<td>BCE on auxiliary centerline heads (soft or binary targets).</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.aux_heads</code></td>
+<td><code>MultiHeadAuxOrientationCE</code></td>
+<td>Cross-entropy on auxiliary orientation-bin heads.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.detection</code></td>
+<td><code>HeatmapBasedDetectionLoss</code></td>
+<td>Focal + size loss for heatmap detection.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.detection</code></td>
+<td><code>DetectionFocalLoss</code></td>
+<td>CornerNet-style penalty-reduced focal loss.</td>
+</tr>
+<tr>
+<td><code>echelon3.losses.detection</code></td>
+<td><code>WidthHeightLoss</code></td>
+<td>L1 loss on box width/height at positive locations.</td>
+</tr>
+</tbody>
+</table>
+<p>The multi-head losses expect dict-shaped predictions/labels and pair with
+<code>MultiHeadTrainer</code>.</p>
+<h2 id="metrics-module-echelon3metrics">Metrics — <code>module: echelon3.metrics.*</code><a class="headerlink" href="#metrics-module-echelon3metrics" title="Permanent link">&para;</a></h2>
+<p>Torchmetrics-style objects (<code>update</code>/<code>compute</code>/<code>reset</code>).</p>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.metrics.classification</code></td>
+<td><code>EER</code></td>
+<td>Equal error rate from the ROC curve.</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.classification</code></td>
+<td><code>AUC</code></td>
+<td>ROC AUC.</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.classification</code></td>
+<td><code>FrrAtFar</code></td>
+<td>False reject rate at a given false accept rate (<code>at_far</code>).</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.segmentation</code></td>
+<td><code>IoU</code></td>
+<td>Mean intersection-over-union (via an internal confusion matrix).</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.segmentation</code></td>
+<td><code>ConfusionMatrix</code></td>
+<td>Multi-class confusion matrix.</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.detection</code></td>
+<td><code>mAP</code></td>
+<td>Mean average precision (wraps torchmetrics <code>MeanAveragePrecision</code>).</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.multibinary</code></td>
+<td><code>MultiHeadBinaryIoU</code></td>
+<td>Per-head binary IoU + macro mean.</td>
+</tr>
+<tr>
+<td><code>echelon3.metrics.base</code></td>
+<td><code>Metric</code></td>
+<td>Base class for custom metrics.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="networks-module-echelon3nets">Networks — <code>module: echelon3.nets.*</code><a class="headerlink" href="#networks-module-echelon3nets" title="Permanent link">&para;</a></h2>
+<h3 id="assemblable-nets">Assemblable nets<a class="headerlink" href="#assemblable-nets" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.nets.classifier</code></td>
+<td><code>ClassifierNet</code></td>
+<td><code>backbone -&gt; head</code> classifier; both are nested triples.</td>
+</tr>
+<tr>
+<td><code>echelon3.nets.segmenter</code></td>
+<td><code>Segmenter</code></td>
+<td><code>backbone -&gt; neck -&gt; head</code>, bilinear-upsampled to input size.</td>
+</tr>
+<tr>
+<td><code>echelon3.nets.segmenter</code></td>
+<td><code>LightSegmenter</code></td>
+<td>Neckless segmenter for edge deployment.</td>
+</tr>
+<tr>
+<td><code>echelon3.nets.detector</code></td>
+<td><code>HeatmapDetector</code></td>
+<td>Anchor-free heatmap detector with a decode step at inference.</td>
+</tr>
+<tr>
+<td><code>echelon3.nets.timm_core_transformer</code></td>
+<td><code>CoreTransformer</code></td>
+<td>A timm ViT with its patch-embed removed (operates on patch tokens).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="classifier-heads-module-echelon3netsheadsclassifier_heads">Classifier heads — <code>module: echelon3.nets.heads.classifier_heads</code><a class="headerlink" href="#classifier-heads-module-echelon3netsheadsclassifier_heads" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DenseClassifierHead</code></td>
+<td>Dropout + linear over flattened features.</td>
+</tr>
+<tr>
+<td><code>Conv1x1ClassifierHead</code></td>
+<td>1×1 conv head with spatial mean pooling.</td>
+</tr>
+<tr>
+<td><code>AgnosticClassifierHead</code></td>
+<td>Feature-norm-based open-set score.</td>
+</tr>
+<tr>
+<td><code>CrossVitHead</code> / <code>CrossVitAgnosticHead</code></td>
+<td>Heads for dual-branch CrossViT features.</td>
+</tr>
+</tbody>
+</table>
+<p><code>module: echelon3.nets.heads.pattern_heads</code> adds <code>MaxPatternHead</code>,
+<code>AveragePatternHead</code>, <code>LinearPatternHead</code> for pattern/patch aggregation.</p>
+<h3 id="layers-module-echelon3netslayerscdc">Layers — <code>module: echelon3.nets.layers.cdc</code><a class="headerlink" href="#layers-module-echelon3netslayerscdc" title="Permanent link">&para;</a></h3>
+<p>Central Difference Convolution family used in anti-spoofing backbones: <code>CDC</code>,
+<code>CDCMasked</code>, <code>Conv2d_Hori_Veri_Cross</code>, <code>Conv2d_Diag_Cross</code>, <code>C_CDN</code>, <code>DC_CDN</code>.</p>
+<h3 id="segmentation-building-blocks-module-echelon3netssegmentation">Segmentation building blocks — <code>module: echelon3.nets.segmentation.*</code><a class="headerlink" href="#segmentation-building-blocks-module-echelon3netssegmentation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>...backbones.timm</code></td>
+<td><code>TimmSegmentationBackbone</code></td>
+<td>Any timm model in <code>features_only</code> mode as a multi-scale backbone.</td>
+</tr>
+<tr>
+<td><code>...backbones.ddrnet</code></td>
+<td><code>DDRNet23SlimBackbone</code></td>
+<td>DDRNet-23-slim backbone with DAPPM fusion.</td>
+</tr>
+<tr>
+<td><code>...heads.simple_head</code></td>
+<td><code>SimpleHead</code> / <code>SimpleAggregatingHead</code></td>
+<td>SegFormer-style lightweight decode heads.</td>
+</tr>
+<tr>
+<td><code>...heads.light</code></td>
+<td><code>LightHead</code></td>
+<td>Minimal conv-BN-act head for edge models.</td>
+</tr>
+<tr>
+<td><code>...heads.decode_head</code></td>
+<td><code>BaseDecodeHead</code></td>
+<td>Base class for MMSeg-style decode heads.</td>
+</tr>
+<tr>
+<td><code>...necks.daspp</code></td>
+<td><code>DASPPneck</code> / <code>DASPPneck2</code></td>
+<td>Dense ASPP context necks.</td>
+</tr>
+<tr>
+<td><code>...necks.psp</code></td>
+<td><code>PSPDecoder</code></td>
+<td>Pyramid pooling decoder (needs <code>echelon3[smp]</code>).</td>
+</tr>
+<tr>
+<td><code>...necks.fpn_like</code></td>
+<td><code>FPNLikeNeck</code></td>
+<td>Tiny FPN-style multi-scale fusion.</td>
+</tr>
+<tr>
+<td><code>...necks.dlinknet_block</code></td>
+<td><code>DLinkNetFPNLikeNeck</code></td>
+<td>FPN-like neck with a D-LinkNet dilated central block.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="trainers-module-echelon3trainers">Trainers — <code>module: echelon3.trainers.*</code><a class="headerlink" href="#trainers-module-echelon3trainers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.trainers.baseline</code></td>
+<td><code>Trainer</code></td>
+<td>The default loop: train/validate/keep-best/checkpoint, DDP- and DataParallel-aware.</td>
+</tr>
+<tr>
+<td><code>echelon3.trainers.multihead</code></td>
+<td><code>MultiHeadTrainer</code></td>
+<td><code>Trainer</code> subclass that handles dict-shaped predictions and labels.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="optimizers-module-echelon3optimizerssam">Optimizers — <code>module: echelon3.optimizers.sam</code><a class="headerlink" href="#optimizers-module-echelon3optimizerssam" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SAMOptimizer</code></td>
+<td>Sharpness-Aware Minimization wrapping a base optimizer (requires <code>echelon3[sam]</code>).</td>
+</tr>
+<tr>
+<td><code>ASAM</code></td>
+<td>Adaptive SAM over SGD (no extra dependency).</td>
+</tr>
+</tbody>
+</table>
+<p>The baseline trainer detects <code>SAMOptimizer</code> (and <code>LBFGS</code>) and drives them with a
+closure automatically.</p>
+<h2 id="weight-loaders-module-echelon3weightloaders">Weight loaders — <code>module: echelon3.weightloaders.*</code><a class="headerlink" href="#weight-loaders-module-echelon3weightloaders" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.weightloaders.basic</code></td>
+<td><code>WeightsLoader</code></td>
+<td>Strict <code>load_state_dict</code> from a checkpoint.</td>
+</tr>
+<tr>
+<td><code>echelon3.weightloaders.partial</code></td>
+<td><code>PartialWeightsLoader</code></td>
+<td>Load only name-and-shape-matching tensors (<code>strip_prefix</code> optional).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="exporters-module-echelon3exporters">Exporters — <code>module: echelon3.exporters.*</code><a class="headerlink" href="#exporters-module-echelon3exporters" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.exporters.onnx</code></td>
+<td><code>OnnxExporter</code></td>
+<td>Export <code>preprocess -&gt; net -&gt; postprocess</code> to ONNX (requires <code>echelon3[export]</code>).</td>
+</tr>
+<tr>
+<td><code>echelon3.exporters.baseline</code></td>
+<td><code>ModelExporter</code></td>
+<td>Abstract base wrapping the fused graph.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="loggers-module-echelon3mlopstensorboard">Loggers — <code>module: echelon3.mlops.tensorboard</code><a class="headerlink" href="#loggers-module-echelon3mlopstensorboard" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TensorboardLogger</code></td>
+<td>Scalar loss/metric logging to TensorBoard (the default logger).</td>
+</tr>
+<tr>
+<td><code>ClassifierTensorboardLogger</code></td>
+<td>Classifier variant.</td>
+</tr>
+<tr>
+<td><code>SegmentationTensorboardLogger</code></td>
+<td>Segmentation variant.</td>
+</tr>
+<tr>
+<td><code>DetectionTensorboardLogger</code></td>
+<td>Detection variant that also logs images with boxes/heatmaps.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="runners-module-echelon3runners">Runners — <code>module: echelon3.runners.*</code><a class="headerlink" href="#runners-module-echelon3runners" title="Permanent link">&para;</a></h2>
+<p>For <code>echelon3-run</code> batch inference.</p>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.runners.images</code></td>
+<td><code>ImagesRunner</code></td>
+<td>Iterate a folder of images through the model.</td>
+</tr>
+<tr>
+<td><code>echelon3.runners.video</code></td>
+<td><code>VideoRunner</code></td>
+<td>Iterate a video file frame by frame.</td>
+</tr>
+<tr>
+<td><code>echelon3.runners.segmenter</code></td>
+<td><code>ImagesSegmenter</code> / <code>VideoSegmenter</code></td>
+<td>Overlay a segmentation <code>colormap</code> on images/video.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="wrappers-module-echelon3wrappersspatial">Wrappers — <code>module: echelon3.wrappers.spatial</code><a class="headerlink" href="#wrappers-module-echelon3wrappersspatial" title="Permanent link">&para;</a></h2>
+<p>Wrap a net (as <code>export.wrapper</code>) to adapt input geometry.</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>UpsampleDownsample</code></td>
+<td>Run the core at a fixed smallest side, then resize the output back.</td>
+</tr>
+<tr>
+<td><code>PadToMultiplier</code></td>
+<td>Pad input to a multiple of <code>m</code>, then crop the output back.</td>
+</tr>
+</tbody>
+</table>
+<p><code>module: echelon3.wrappers.basic</code> exports <code>BasicWrapper</code>, the base class.</p>
+<h2 id="evaluators-module-echelon3evaluators">Evaluators — <code>module: echelon3.evaluators.*</code><a class="headerlink" href="#evaluators-module-echelon3evaluators" title="Permanent link">&para;</a></h2>
+<p>For <code>echelon3-evaluate</code>.</p>
+<table>
+<thead>
+<tr>
+<th><code>module</code></th>
+<th><code>type</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>echelon3.evaluators.classifier</code></td>
+<td><code>ClassifierEvaluator</code></td>
+<td>Evaluate a classifier and save misclassified samples to disk.</td>
+</tr>
+<tr>
+<td><code>echelon3.evaluators.basic</code></td>
+<td><code>Evaluator</code></td>
+<td>Base class for custom evaluators.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../config-schema/">Config Schema</a> — how these fit into each section.</li>
+<li><a href="../../guide/extending/">Extending</a> — add your own classes the same way.
+</content></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
