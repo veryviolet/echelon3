@@ -1,0 +1,147 @@
+# Semantic-segmentation smoke — trains a Segmenter on a synthetic image/mask
+# dataset end to end (cross-entropy over per-pixel classes -> mean-IoU). Runs on
+# CPU or a single GPU.
+#
+#   python gen_seg_data.py --root ./seg_data
+#   SEG_DATA=./seg_data echelon3-train --config-dir . --config-name segmentation_smoke
+#
+# Run it from this directory: the CLI puts the cwd on sys.path so `module:
+# backbone` resolves to backbone.py next to this file.
+hydra:
+  job:
+    chdir: False
+defaults:
+  - _self_
+
+device: cuda           # override with device=cpu for a CPU-only run
+device_ids: [0]
+
+net:
+  module: echelon3.nets.segmenter
+  type: Segmenter
+  config:
+    align_corners: true
+    inference: false
+    backbone:
+      module: backbone
+      type: TinySegBackbone
+      config:
+        channels: 32
+    head:
+      module: echelon3.nets.segmentation.heads.simple_head
+      type: SimpleHead
+      config:
+        channels: 32
+        num_classes: 3
+
+data:
+  train:
+    module: echelon3.data.image2image
+    type: ImageSegmentationDataset
+    config:
+      classes: 3
+      image_folder: ${oc.env:SEG_DATA,./seg_data}/images/train
+      image_extension: png
+      mask_folder: ${oc.env:SEG_DATA,./seg_data}/masks/train
+      mask_extension: png
+  test:
+    module: echelon3.data.image2image
+    type: ImageSegmentationDataset
+    config:
+      classes: 3
+      image_folder: ${oc.env:SEG_DATA,./seg_data}/images/test
+      image_extension: png
+      mask_folder: ${oc.env:SEG_DATA,./seg_data}/masks/test
+      mask_extension: png
+
+transform:
+  train:
+    augment:
+      resize:
+        module: albumentations
+        type: Resize
+        config:
+          height: 128
+          width: 128
+          p: 1.0
+    preprocess:
+      to01:
+        name: to01
+        module: echelon3.transforms.preprocess.basic
+        type: To01
+  test:
+    augment:
+      resize:
+        module: albumentations
+        type: Resize
+        config:
+          height: 128
+          width: 128
+          p: 1.0
+    preprocess:
+      to01:
+        name: to01
+        module: echelon3.transforms.preprocess.basic
+        type: To01
+
+loss:
+  - ce:
+      module: torch.nn
+      type: CrossEntropyLoss
+      weight: 1.0
+      config: {}
+
+metrics:
+  - iou:
+      module: echelon3.metrics.segmentation
+      type: IoU
+      config:
+        num_classes: 3
+
+dataloaders:
+  train:
+    module: torch.utils.data
+    type: DataLoader
+    config:
+      batch_size: 8
+      shuffle: true
+      num_workers: 2
+      drop_last: true
+  test:
+    module: torch.utils.data
+    type: DataLoader
+    config:
+      batch_size: 8
+      shuffle: false
+      num_workers: 2
+
+optimizer:
+  module: torch.optim
+  type: AdamW
+  config:
+    lr: 0.002
+    weight_decay: 0.0001
+
+scheduler:
+  module: torch.optim.lr_scheduler
+  type: LinearLR
+  config:
+    start_factor: 1.0
+    end_factor: 1.0
+    total_iters: 1
+
+trainer:
+  module: echelon3.trainers.baseline
+  type: Trainer
+  config:
+    epochs: 15
+    keep_best_on:
+      iou:
+        mode: directional
+        value: high
+    high_is_better: true
+    times_to_validate_per_epoch: 1
+
+target:
+  path: ${oc.env:SEG_TARGET,./targets/segmentation_smoke}
+  checkpoints_to_keep: 2

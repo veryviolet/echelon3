@@ -182,7 +182,11 @@ class IoU(Metric):
             iou = true_positive / (true_positive + false_positive + false_negative)
 
         use_idx = np.ones_like(iou, dtype=bool)
-        use_idx[self.ignore_index] = False
+        # Only mask out ignored classes when there are any. With ignore_index=None
+        # `use_idx[None]` adds an axis and the assignment wipes the whole mask,
+        # so mIoU would always be nan.
+        if self.ignore_index is not None:
+            use_idx[list(self.ignore_index)] = False
 
         return np.nanmean(iou[use_idx])
 #        return iou, np.nanmean(iou)

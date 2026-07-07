@@ -4,6 +4,22 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.4.1 — 2026-07-07
+
+### Fixed
+
+- `IoU.compute` (segmentation metric) returned `nan` whenever `ignore_index` was
+  unset (the default): `use_idx[None] = False` added an axis and wiped the whole
+  keep-mask, so `nanmean` ran over an empty array. Now the mask is only touched
+  when there are classes to ignore. Verified end to end — a `Segmenter` smoke on
+  synthetic masks moves mIoU from ~0.85 to ~0.96.
+
+### Added
+
+- `examples/segmentation/`: a self-contained semantic-segmentation smoke
+  (synthetic image/mask generator, a tiny dependency-free backbone, a `Segmenter`
+  + cross-entropy + `IoU` config) mirroring `examples/detector/`.
+
 ## 0.4.0 — 2026-07-07
 
 ### Fixed

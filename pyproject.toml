@@ -1,6 +1,6 @@
 [project]
 name = "echelon3"
-version = "0.4.0"
+version = "0.4.1"
 description = "Config-driven PyTorch training framework: assemble nets, data, losses and trainers from YAML"
 readme = "README.md"
 requires-python = ">=3.10"
