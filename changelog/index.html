@@ -1003,8 +1003,38 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
-<h2 id="031-2026-07-07">0.3.1 — 2026-07-07<a class="headerlink" href="#031-2026-07-07" title="Permanent link">&para;</a></h2>
+<h2 id="040-2026-07-07">0.4.0 — 2026-07-07<a class="headerlink" href="#040-2026-07-07" title="Permanent link">&para;</a></h2>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Detection pipeline now trains end to end (CenterNet-style <code>HeatmapDetector</code>,
+  YOLO-format <code>DetectionDataset</code>). Several defects along the path were fixed:</li>
+<li><code>Trainer.set_to_device</code> now stacks the per-sample image tensors that
+    <code>VariableDataLoader</code> produces into one <code>(N, C, H, W)</code> batch, and leaves the
+    variable-length box lists as Python lists instead of calling <code>.to()</code> on them
+    (image-in-image <code>(base, query)</code> pairs are unaffected).</li>
+<li>The train/validate steps no longer assume <code>labels</code> is a tensor (they read
+    <code>labels.shape</code> only when it is), so list-valued detection targets work.</li>
+<li><code>metrics.base.Metric</code> gained a no-op <code>.to()</code> so custom metrics (mAP, EER,
+    AUC, IoU, …) interoperate with the trainer's uniform <code>metric.to(device)</code>.</li>
+<li><code>HeatmapBasedDetectionLoss</code> uses the penalty-reduced CornerNet/CenterNet
+    focal loss on the sigmoid heatmaps the head emits, instead of
+    <code>sigmoid_focal_loss</code> (which double-applied a sigmoid and crushed the
+    gradient, so heatmap peaks never formed).</li>
+<li><code>DecodeHeatmaps.decode</code> keeps YOLO/Albumentations boxes as normalized floats
+    (they were cast to <code>LongTensor</code>, truncating every coordinate to 0).</li>
+<li>Class labels are coerced to integer tensors in both the encoder and the mAP
+    metric (Albumentations round-trips them through float arrays).</li>
+</ul>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>detection</code> extra (<code>faster-coco-eval</code>) — the <code>mAP</code> metric needs a COCO backend;
+  <code>mAP</code> takes an optional <code>backend</code> argument (default <code>faster_coco_eval</code>).</li>
+<li><code>examples/detector/</code>: a self-contained CenterNet-like detector smoke — synthetic
+  YOLO dataset generator, a tiny dependency-free heatmap backbone, and a config
+  that trains, validates (mAP rises above zero) and checkpoints on CPU or GPU.</li>
+</ul>
+<h2 id="031-2026-07-07">0.3.1 — 2026-07-07<a class="headerlink" href="#031-2026-07-07" title="Permanent link">&para;</a></h2>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Full MkDocs (Material) documentation site published to GitHub Pages at
   <a href="https://veryviolet.github.io/echelon3/">https://veryviolet.github.io/echelon3/</a>: getting-started, concepts
@@ -1014,7 +1044,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
 <li><code>[project.urls]</code> with a <code>Documentation</code> link, so PyPI shows it.</li>
 </ul>
 <h2 id="030-2026-07-05">0.3.0 — 2026-07-05<a class="headerlink" href="#030-2026-07-05" title="Permanent link">&para;</a></h2>
-<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>echelon3-finetune</code> CLI: warm-start from a checkpoint (<code>init_from</code>), freezing
   by regex patterns (<code>finetune.freeze_patterns</code>), head-only training and
@@ -1022,7 +1052,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   blocks present it behaves exactly like <code>echelon3-train</code>.</li>
 </ul>
 <h2 id="020-2026-07-05">0.2.0 — 2026-07-05<a class="headerlink" href="#020-2026-07-05" title="Permanent link">&para;</a></h2>
-<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li>ONNX export: <code>ModelExporter</code> base + <code>OnnxExporter</code>
   (preprocess → net → postprocess wrapped into a single graph),
@@ -1032,7 +1062,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   repositories can reference their local packages from configs
   (<code>module: my_zoo.nets.foo</code>) when running from the repo root.</li>
 </ul>
-<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>create_exporters</code> instantiated <code>torch.nn.Identity</code> incorrectly when no
   preprocess/postprocess is configured.</li>
@@ -1040,7 +1070,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
 <h2 id="010-2026-07-05">0.1.0 — 2026-07-05<a class="headerlink" href="#010-2026-07-05" title="Permanent link">&para;</a></h2>
 <p>First public release. Core of the framework extracted from the internal
 echelon2 codebase and cleaned up:</p>
-<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Config-driven component factory (<code>echelon3.creator</code>): every component is a
   <code>module</code> / <code>type</code> / <code>config</code> YAML triple resolved by dynamic import, with a
