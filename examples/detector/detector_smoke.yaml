@@ -1,0 +1,157 @@
+# CenterNet-like detector smoke — trains a HeatmapDetector on a synthetic
+# YOLO-format dataset end to end (encode boxes to gaussian heatmaps -> focal +
+# width/height loss -> decode peaks -> mAP). Runs on CPU or a single GPU.
+#
+#   python gen_det_data.py --root ./det_data
+#   DET_DATA=./det_data echelon3-train --config-dir . --config-name detector_smoke
+#
+# Run it from this directory: the CLI puts the cwd on sys.path so `module:
+# backbone` resolves to backbone.py next to this file.
+hydra:
+  job:
+    chdir: False
+
+defaults:
+  - _self_
+
+device: cuda           # override with device=cpu for a CPU-only run
+device_ids: [0]
+
+net:
+  module: echelon3.nets.detector
+  type: HeatmapDetector
+  config:
+    object_classes: 2
+    output_size: [128, 128]
+    heatmap_backbone:
+      module: backbone
+      type: TinyHeatmapBackbone
+      config:
+        out_channels: 4        # object_classes + 2 (width, height)
+        width: 32
+        output_size: [128, 128]
+
+data:
+  train:
+    module: echelon3.data.detection
+    type: DetectionDataset
+    config:
+      classes: 2
+      bboxes_type: yolo
+      image_folder: ${oc.env:DET_DATA,./det_data}/images/train
+      image_extension: png
+      annotations_folder: ${oc.env:DET_DATA,./det_data}/labels/train
+      annotations_extension: txt
+  test:
+    module: echelon3.data.detection
+    type: DetectionDataset
+    config:
+      classes: 2
+      bboxes_type: yolo
+      image_folder: ${oc.env:DET_DATA,./det_data}/images/test
+      image_extension: png
+      annotations_folder: ${oc.env:DET_DATA,./det_data}/labels/test
+      annotations_extension: txt
+
+transform:
+  train:
+    config:
+      bbox_params:
+        format: yolo
+        min_visibility: 0.2
+    augment:
+      resize:
+        module: albumentations
+        type: Resize
+        config:
+          height: 128
+          width: 128
+          p: 1.0
+    preprocess:
+      to01:
+        name: to01
+        module: echelon3.transforms.preprocess.basic
+        type: To01
+  test:
+    config:
+      bbox_params:
+        format: yolo
+        min_visibility: 0.2
+    augment:
+      resize:
+        module: albumentations
+        type: Resize
+        config:
+          height: 128
+          width: 128
+          p: 1.0
+    preprocess:
+      to01:
+        name: to01
+        module: echelon3.transforms.preprocess.basic
+        type: To01
+
+loss:
+  - heatmap:
+      module: echelon3.losses.detection
+      type: HeatmapBasedDetectionLoss
+      weight: 1.0
+      config:
+        bbox_type: yolo
+        num_classes: 2
+        output_size: [128, 128]
+
+metrics:
+  - mAP:
+      module: echelon3.metrics.detection
+      type: mAP
+      config:
+        bbox_type: yolo
+
+dataloaders:
+  train:
+    module: echelon3.dataloaders.varloader
+    type: VariableDataLoader
+    config:
+      batch_size: 8
+      shuffle: true
+      num_workers: 2
+      drop_last: true
+  test:
+    module: echelon3.dataloaders.varloader
+    type: VariableDataLoader
+    config:
+      batch_size: 8
+      shuffle: false
+      num_workers: 2
+
+optimizer:
+  module: torch.optim
+  type: AdamW
+  config:
+    lr: 0.001
+    weight_decay: 0.0001
+
+scheduler:
+  module: torch.optim.lr_scheduler
+  type: LinearLR
+  config:
+    start_factor: 1.0
+    end_factor: 1.0
+    total_iters: 1
+
+trainer:
+  module: echelon3.trainers.baseline
+  type: Trainer
+  config:
+    epochs: 40
+    keep_best_on:
+      mAP:
+        mode: directional
+        value: high
+    high_is_better: true
+    times_to_validate_per_epoch: 1
+
+target:
+  path: ${oc.env:DET_TARGET,./targets/detector_smoke}
+  checkpoints_to_keep: 2

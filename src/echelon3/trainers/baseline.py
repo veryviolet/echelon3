@@ -244,9 +244,8 @@ class Trainer:
             self._optimizer.zero_grad(set_to_none=True)
             predictions = self._net(source)
 
-            if isinstance(predictions, torch.Tensor) and len(predictions.shape) > len(
-                labels.shape
-            ):
+            if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
+                    and len(predictions.shape) > len(labels.shape):
                 while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
                     predictions = predictions.squeeze(-1)
 
@@ -527,9 +526,8 @@ class Trainer:
         net = self._eval_net if self._eval_net is not None else self._net
         predictions = net(source)
 
-        if isinstance(predictions, torch.Tensor) and len(predictions.shape) > len(
-            labels.shape
-        ):
+        if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
+                and len(predictions.shape) > len(labels.shape):
             while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
                 predictions = predictions.squeeze(-1)
 
@@ -544,17 +542,39 @@ class Trainer:
         return predictions, losses_values
 
     def set_to_device(self, source, labels):
-        # image_in_image returns a (base, query) tuple as source (see pair_collate_fn);
-        # handle tuple as well as list so each tensor is moved to the device.
+        # Sources arrive in three shapes:
+        #   * a single batched tensor (classification/segmentation) -> move it;
+        #   * an (base, query) tuple of *already batched* 4D tensors
+        #     (image_in_image, pair_collate_fn) -> move each, keep the tuple;
+        #   * a tuple of per-sample 3D image tensors (detection, VariableDataLoader
+        #     collates variable-count labels, so images are not stacked) -> stack
+        #     into one (N, C, H, W) batch tensor.
         if isinstance(source, (list, tuple)):
-            source = [s.to(self._device, non_blocking=True) for s in source]
+            same_sized_samples = (
+                len(source) > 0
+                and all(isinstance(s, torch.Tensor) and s.dim() == 3 for s in source)
+                and all(s.shape == source[0].shape for s in source)
+            )
+            if same_sized_samples:
+                source = torch.stack(list(source), dim=0).to(self._device, non_blocking=True)
+            else:
+                source = [
+                    s.to(self._device, non_blocking=True) if isinstance(s, torch.Tensor) else s
+                    for s in source
+                ]
         else:
             source = source.to(self._device, non_blocking=True)
 
-        if isinstance(labels, (list, tuple)):
-            labels = [l.to(self._device, non_blocking=True) for l in labels]
-        else:
+        # Labels may be a tensor, an (src, tgt) tuple of tensors, or — for detection
+        # — a tuple of per-image Python lists of boxes. Only move tensors; leave the
+        # box lists on CPU (the loss/metric consume them there and move as needed).
+        if isinstance(labels, torch.Tensor):
             labels = labels.to(self._device, non_blocking=True)
+        elif isinstance(labels, (list, tuple)):
+            labels = [
+                l.to(self._device, non_blocking=True) if isinstance(l, torch.Tensor) else l
+                for l in labels
+            ]
 
         return source, labels
 

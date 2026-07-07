@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from torchvision.ops.focal_loss import sigmoid_focal_loss
 
 from echelon3.utils.bbox_encode_decode import EncodeBBoxes
 
@@ -52,7 +51,7 @@ class WidthHeightLoss(nn.Module):
 
 class HeatmapBasedDetectionLoss(nn.Module):
 
-    def __init__(self, *args, bbox_type='yolo', alpha=1.0, beta=4.0, output_size=(224, 224), num_classes=2, **kwargs):
+    def __init__(self, *args, bbox_type='yolo', alpha=2.0, beta=4.0, output_size=(224, 224), num_classes=2, **kwargs):
         super(HeatmapBasedDetectionLoss, self).__init__(*args, **kwargs)
         self.encoder = EncodeBBoxes(bbox_type=bbox_type, output_size=output_size, num_classes=num_classes)
         self.num_classes = num_classes
@@ -65,12 +64,14 @@ class HeatmapBasedDetectionLoss(nn.Module):
         else:
             preds = inputs
         heatmaps = self.encoder.generate(target).to(preds.device)
-#        score_loss = torch.nn.functional.mse_loss(preds, heatmaps)
-        #score_loss = torch.nn.functional.mse_loss(preds[:, :-2, :, :], heatmaps[:, :-2, :, :])
         sizes_loss = self.sizes_loss(preds[:, -2:, :, :], heatmaps[:, -2:, :, :])
-#        focal = self.focal_loss(preds[:, 0:self.num_classes, :, :], heatmaps[:, 0:self.num_classes, :, :])
-        focal_loss = sigmoid_focal_loss(preds[:, 0:self.num_classes, :, :], heatmaps[:, 0:self.num_classes, :, :],
-                                        reduction='mean')
+        # The network head (ModalityConv) already applies a sigmoid, so its class
+        # channels are probabilities in [0, 1]; pair them with the penalty-reduced
+        # CornerNet/CenterNet focal loss (which expects probabilities). Using
+        # torchvision's sigmoid_focal_loss here would sigmoid a second time and
+        # crush the gradient, so heatmap peaks never form.
+        focal_loss = self.focal_loss(preds[:, 0:self.num_classes, :, :],
+                                     heatmaps[:, 0:self.num_classes, :, :])
         return focal_loss + sizes_loss
 
 

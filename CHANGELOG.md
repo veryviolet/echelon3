@@ -4,6 +4,37 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.4.0 — 2026-07-07
+
+### Fixed
+
+- Detection pipeline now trains end to end (CenterNet-style `HeatmapDetector`,
+  YOLO-format `DetectionDataset`). Several defects along the path were fixed:
+  - `Trainer.set_to_device` now stacks the per-sample image tensors that
+    `VariableDataLoader` produces into one `(N, C, H, W)` batch, and leaves the
+    variable-length box lists as Python lists instead of calling `.to()` on them
+    (image-in-image `(base, query)` pairs are unaffected).
+  - The train/validate steps no longer assume `labels` is a tensor (they read
+    `labels.shape` only when it is), so list-valued detection targets work.
+  - `metrics.base.Metric` gained a no-op `.to()` so custom metrics (mAP, EER,
+    AUC, IoU, …) interoperate with the trainer's uniform `metric.to(device)`.
+  - `HeatmapBasedDetectionLoss` uses the penalty-reduced CornerNet/CenterNet
+    focal loss on the sigmoid heatmaps the head emits, instead of
+    `sigmoid_focal_loss` (which double-applied a sigmoid and crushed the
+    gradient, so heatmap peaks never formed).
+  - `DecodeHeatmaps.decode` keeps YOLO/Albumentations boxes as normalized floats
+    (they were cast to `LongTensor`, truncating every coordinate to 0).
+  - Class labels are coerced to integer tensors in both the encoder and the mAP
+    metric (Albumentations round-trips them through float arrays).
+
+### Added
+
+- `detection` extra (`faster-coco-eval`) — the `mAP` metric needs a COCO backend;
+  `mAP` takes an optional `backend` argument (default `faster_coco_eval`).
+- `examples/detector/`: a self-contained CenterNet-like detector smoke — synthetic
+  YOLO dataset generator, a tiny dependency-free heatmap backbone, and a config
+  that trains, validates (mAP rises above zero) and checkpoints on CPU or GPU.
+
 ## 0.3.1 — 2026-07-07
 
 ### Added

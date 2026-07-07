@@ -83,7 +83,13 @@ class DecodeHeatmaps(torch.nn.Module):
         else:
             raise RuntimeError(f'unsupported bbox type: {self.bbox_type}')
 
-        detections = (bboxes.type(torch.LongTensor), scores, clses)
+        # YOLO/ALBUMENTATIONS boxes are normalized [0, 1] — keep them float so
+        # downstream scaling (coords_to_absolute) works. Only the absolute-pixel
+        # formats (COCO/PASCAL_VOC) are cast to integer pixel coordinates.
+        if self.bbox_type in (BBoxType.YOLO, BBoxType.ALBUMENTATIONS):
+            detections = (bboxes, scores, clses)
+        else:
+            detections = (bboxes.type(torch.LongTensor), scores, clses)
 
         return detections
 
@@ -157,7 +163,10 @@ class EncodeBBoxes(torch.nn.Module):
             gt_scoremap = torch.zeros(self.num_classes, *self.output_size)
             gt_wh = torch.zeros(2, *self.output_size)
 
-            classes = torch.tensor([l[4] for l in labels[idx]])
+            # albumentations round-trips class labels through float arrays, so the
+            # 5th field comes back as e.g. 1.0; the class indexes a heatmap channel
+            # and must be an integer tensor.
+            classes = torch.tensor([l[4] for l in labels[idx]], dtype=torch.long)
             boxes = self.bbox_class([l[0:4] for l in labels[idx]])
             if len(boxes) != 0:
                 centers = boxes.get_centers()
