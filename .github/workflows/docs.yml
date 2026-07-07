@@ -24,10 +24,12 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Install docs deps
-        run: pip install -r docs/requirements.txt
+        run: |
+          pip install -r docs/requirements.txt
       - name: Configure git author for gh-deploy commit
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
       - name: mkdocs gh-deploy
-        run: mkdocs gh-deploy --force --message "docs: deploy ${GITHUB_REF_NAME}"
+        run: |
+          mkdocs gh-deploy --force --message "docs: deploy ${GITHUB_REF_NAME}"
