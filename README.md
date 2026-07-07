@@ -16,6 +16,8 @@ There is no component registry: anything importable can be plugged in — classe
 from `echelon3`, from `torch`/`timm`/`torchmetrics`/`albumentations`, or from
 your own project code living next to your configs.
 
+**Documentation: <https://veryviolet.github.io/echelon3/>**
+
 ## Install
 
 ```

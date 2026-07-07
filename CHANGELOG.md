@@ -4,6 +4,17 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.3.1 — 2026-07-07
+
+### Added
+
+- Full MkDocs (Material) documentation site published to GitHub Pages at
+  <https://veryviolet.github.io/echelon3/>: getting-started, concepts
+  (how-it-works, run anatomy), guides (extending, DDP, ONNX export) and reference
+  (config schema, built-in components, CLI). `docs` extra + a `docs` workflow that
+  `mkdocs gh-deploy`s on every `v*` tag.
+- `[project.urls]` with a `Documentation` link, so PyPI shows it.
+
 ## 0.3.0 — 2026-07-05
 
 ### Added

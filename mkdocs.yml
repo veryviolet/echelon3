@@ -1,0 +1,64 @@
+site_name: echelon3
+site_url: https://veryviolet.github.io/echelon3/
+site_description: Config-driven PyTorch training framework — assemble nets, data, losses and trainers from YAML.
+repo_url: https://github.com/veryviolet/echelon3
+repo_name: veryviolet/echelon3
+exclude_docs: README.md
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path:
+        - .
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - First Run: getting-started/first-run.md
+  - Concepts:
+      - How It Works: concepts/how-it-works.md
+      - Anatomy of a Run: concepts/run-anatomy.md
+  - Guide:
+      - Extending with Your Own Code: guide/extending.md
+      - Multi-GPU (DDP): guide/ddp.md
+      - Exporting to ONNX: guide/export.md
+  - Reference:
+      - Config Schema: reference/config-schema.md
+      - Built-in Components: reference/components.md
+      - CLI: reference/cli.md
+  - Changelog: changelog.md
