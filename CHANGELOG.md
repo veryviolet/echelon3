@@ -4,6 +4,31 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.3 — 2026-07-08
+
+### Changed
+
+- **CLI output is now uniformly English and single-colour.** A handful of runtime
+  messages (and raised errors) were Russian and/or highlighted in yellow, which
+  looked out of place in the public package; they now read in English in the
+  ambient colour like the rest of the `-->` log.
+- **Warnings no longer corrupt progress bars.** Library warnings are collected
+  instead of printed inline; a short summary (`--> N warning(s) since last report`
+  with per-message counts) is emitted before each validation and once at the end.
+  Deprecation/Future noise is dropped outright. The c10d `barrier(): using the
+  device under current context` warning is silenced at the source by passing
+  `device_id` to `init_process_group`.
+
+### Fixed
+
+- **Config parameters with sensible defaults are now optional — omitting them no
+  longer crashes.** `transform` (augment/preprocess), `metrics`, and `scheduler`
+  may be omitted entirely (→ ToTensorV2-only, no metrics, constant LR);
+  `keep_best_on` is optional (→ save every validation); and the per-object
+  `config:` block is optional for `net`, datasets, losses, and schedulers
+  (constructed with no extra args). Loss `weight` defaults to `1.0`. A new pytest
+  suite (`tests/`, `pip install -e .[test]`) covers these paths.
+
 ## 0.7.2 — 2026-07-08
 
 ### Fixed

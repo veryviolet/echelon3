@@ -82,6 +82,9 @@ def create_single_preprocess(config: DictConfig):
 def create_augments(config: DictConfig) -> Tuple[callable, callable]:
     transforms = {k: A.Compose([ToTensorV2()]) for k in TRANSFORM_PURPOSES}
 
+    if config is None:  # секция transform опущена — по ToTensorV2 на train/test
+        return transforms['train'], transforms['test']
+
     for key, cfg in config.items():
         if key not in TRANSFORM_PURPOSES:
             raise RuntimeError(f'purpose of transform must be one of {TRANSFORM_PURPOSES}')
@@ -96,18 +99,23 @@ def create_augments(config: DictConfig) -> Tuple[callable, callable]:
 def create_preprocesses(config: DictConfig) -> Tuple[callable, callable]:
     transforms = {k: None for k in TRANSFORM_PURPOSES}
 
+    if config is None:  # секция transform опущена — препроцесса нет
+        return transforms['train'], transforms['test']
+
     for key, cfg in config.items():
         if key not in TRANSFORM_PURPOSES:
             raise RuntimeError(f'purpose of transform must be one of {TRANSFORM_PURPOSES}')
 
-        transforms[key] = create_single_preprocess(cfg.preprocess)
+        if 'preprocess' in cfg.keys():  # preprocess внутри purpose опционален
+            transforms[key] = create_single_preprocess(cfg.preprocess)
 
     return transforms['train'], transforms['test']
 
 
 def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwargs):
     ds_type = get_attr_from_module(config.module, config.type)
-    ds = ds_type(**config.config, augment=augment, preprocess=preprocess, **extra_kwargs)
+    base = dict(config.config) if 'config' in config.keys() else {}
+    ds = ds_type(**base, augment=augment, preprocess=preprocess, **extra_kwargs)
     return ds
 
 
@@ -180,7 +188,7 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
 
 def create_net(config: DictConfig):
     net_type = get_attr_from_module(config.module, config.type)
-    net = net_type(**config.config)
+    net = net_type(**config.config) if 'config' in config.keys() else net_type()
     return net
 
 
@@ -196,7 +204,8 @@ def create_loss(config: DictConfig):
     for cfg in config:
         name, one = list(cfg.items())[0]
         loss_type = get_attr_from_module(one.module, one.type)
-        losses[name] = (loss_type(**one.config) if 'config' in one.keys() else loss_type(), one.weight)
+        losses[name] = (loss_type(**one.config) if 'config' in one.keys() else loss_type(),
+                        one.get('weight', 1.0))
 
     return losses
 
@@ -204,6 +213,8 @@ def create_loss(config: DictConfig):
 def create_metrics(config):
 
     metrics = {}
+    if config is None:
+        return metrics
 
     for cfg in config:
         name, one = list(cfg.items())[0]
@@ -224,7 +235,8 @@ def create_optimizer(config: DictConfig, params):
 
 def create_scheduler(config: DictConfig, optimizer: torch.optim.Optimizer):
     sch_type = get_attr_from_module(config.module, config.type)
-    sch = sch_type(optimizer=optimizer, **config.config)
+    sch = sch_type(optimizer=optimizer, **config.config) if 'config' in config.keys() \
+        else sch_type(optimizer=optimizer)
     return sch
 
 
@@ -273,7 +285,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         if global_bs % world != 0:
             raise ValueError(
                 f'DDP: dataloaders.train.config.batch_size={global_bs} '
-                f'не делится на world_size={world}'
+                f'is not divisible by world_size={world}'
             )
         train_cfg['batch_size'] = global_bs // world
         # shuffle обеспечивает DistributedSampler (эксклюзивен с shuffle=True)
@@ -283,7 +295,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         )
         print(f'--> DDP dataloader: global batch {global_bs} = '
               f'{train_cfg["batch_size"]}/process x {world} processes '
-              f'(num_workers={train_cfg.get("num_workers", 0)} на процесс)')
+              f'(num_workers={train_cfg.get("num_workers", 0)} per process)')
 
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
         train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))

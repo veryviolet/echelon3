@@ -2,6 +2,15 @@ import os
 import sys
 
 
+def setup_warnings():
+    """Глушить предупреждения инлайн (чтобы не рвали прогрессбары) и копить их —
+    краткое саммари печатается штатным форматом echelon3 перед каждой валидацией
+    (см. echelon3.warncollect.flush в трейнере). Идемпотентно; зовётся в начале
+    каждого CLI."""
+    from echelon3 import warncollect
+    warncollect.install()
+
+
 def add_cwd_to_sys_path():
     """Делает модули текущего каталога импортируемыми из конфигов.
 
@@ -64,17 +73,17 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
             print(f"--> DDP dataloader RAM: {len(gpus)} ranks × {_nw} workers × "
                   f"{_pf} prefetch = {_total} batches prefetched on this node")
             if _total > 64:
-                print(f"--> WARNING: {_total} предзагруженных батчей на одной ноде — "
-                      "риск RAM-OOM; снизьте dataloaders.train.config.num_workers / "
-                      "prefetch_factor, если ран падает/виснет.")
+                print(f"--> WARNING: {_total} prefetched batches on one node — "
+                      "RAM-OOM risk; lower dataloaders.train.config.num_workers / "
+                      "prefetch_factor if the run crashes or hangs.")
             _cores = os.cpu_count() or 0
             if _cores and len(gpus) * _nw > _cores:
-                print(f"--> WARNING: {len(gpus)}×{_nw}={len(gpus) * _nw} DataLoader-воркеров "
-                      f"> {_cores} ядер — переподписка CPU; снизьте num_workers "
-                      "(ориентир: ядра / ранги на ранг).")
+                print(f"--> WARNING: {len(gpus)}×{_nw}={len(gpus) * _nw} DataLoader workers "
+                      f"> {_cores} cores — CPU over-subscription; lower num_workers "
+                      "(rule of thumb: cores / ranks per rank).")
             if _dl.get("persistent_workers"):
-                print("--> WARNING: persistent_workers=true держит воркеров живыми между "
-                      "эпохами — при нечистой остановке выше риск процессов-сирот.")
+                print("--> WARNING: persistent_workers=true keeps workers alive between "
+                      "epochs — higher risk of orphaned processes on an unclean stop.")
     except Exception:
         pass
 
@@ -98,8 +107,8 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     except ChildFailedError:
         # Воркер умер (частая причина — RAM/CUDA-OOM от num_workers × prefetch ×
         # ранги). Сообщаем явно, а не выходим молча по чужому traceback.
-        print("--> DDP: воркер упал (traceback ранга выше). Частая причина под DDP — "
-              "OOM от dataloaders.*.config.num_workers / prefetch_factor.",
+        print("--> DDP: a worker died (see the rank traceback above). Common cause under "
+              "DDP: OOM from dataloaders.*.config.num_workers / prefetch_factor.",
               file=sys.stderr)
         raise
     return True

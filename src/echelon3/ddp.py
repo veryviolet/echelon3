@@ -65,9 +65,17 @@ def init_ddp_if_needed() -> bool:
         os.environ.setdefault("TORCH_NCCL_ASYNC_ERROR_HANDLING", "1")
         os.environ.setdefault("TORCH_NCCL_DESYNC_DEBUG", "1")
         backend = "nccl" if torch.cuda.is_available() else "gloo"
-        dist.init_process_group(backend=backend, timeout=_PG_TIMEOUT)
+        pg_kwargs = dict(backend=backend, timeout=_PG_TIMEOUT)
         if torch.cuda.is_available():
             torch.cuda.set_device(local_rank())
+            # device_id глушит c10d-warning "barrier(): using the device under
+            # current context" в источнике (параметр есть в свежем torch).
+            pg_kwargs["device_id"] = torch.device("cuda", local_rank())
+        try:
+            dist.init_process_group(**pg_kwargs)
+        except TypeError:
+            pg_kwargs.pop("device_id", None)  # старый torch без device_id
+            dist.init_process_group(**pg_kwargs)
     return is_ddp()
 
 

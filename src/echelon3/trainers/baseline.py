@@ -24,6 +24,7 @@ from echelon3.mlops.basic import MLOpsLogger
 
 from echelon3 import ddp
 from echelon3 import runtime
+from echelon3 import warncollect
 
 
 class _NullLogger:
@@ -81,7 +82,6 @@ class Trainer:
     def __init__(
         self,
         epochs: int,
-        keep_best_on,
         train_dataloader: DataLoader,
         test_dataloader,
         net: torch.nn.Module,
@@ -91,6 +91,7 @@ class Trainer:
         scheduler,
         ckpt_manager,
         mlops_logger,
+        keep_best_on=None,
         times_to_validate_per_epoch=1,
         float_labels: bool = False,
         reset: bool = False,
@@ -187,8 +188,8 @@ class Trainer:
             bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
             self._amp_dtype = torch.bfloat16 if bf16_ok else None
             if ddp.is_main():
-                print(f"--> AMP: fp16 + {type(self._optimizer).__name__} (closure) не поддержан; "
-                      f"использую {runtime.precision_label(self._amp_dtype)}")
+                print(f"--> AMP: fp16 with {type(self._optimizer).__name__} (closure optimizer) "
+                      f"is unsupported; using {runtime.precision_label(self._amp_dtype)}")
         self._amp_enabled = self._amp_dtype is not None
         # dtype для autocast; когда AMP выключен — значение игнорируется (enabled=False).
         self._autocast_dtype = self._amp_dtype if self._amp_enabled else torch.bfloat16
@@ -197,8 +198,8 @@ class Trainer:
             print(f"--> Precision: {runtime.precision_label(self._amp_dtype)} "
                   f"(autocast {'on' if self._amp_enabled else 'off'})")
             if self._amp_enabled:
-                print(Fore.YELLOW + "--> AMP включён: численность отличается от fp32-прогонов "
-                      "(precision: fp32 чтобы выключить)" + Fore.CYAN)
+                print("--> AMP on: numerics differ from fp32 runs "
+                      "(set precision: fp32 to disable)")
 
         # metrics_on может прийти как DictConfig/Mapping
         raw_metrics_on = kwargs.get("metrics_on", None)
@@ -258,7 +259,7 @@ class Trainer:
                 CHECKPOINT_EPOCH_KEYWORD: self._current_epoch,
                 CHECKPOINT_MODEL_KEYWORD: ddp.state_dict_for_save(self._net),
                 CHECKPOINT_OPTIMIZER_KEYWORD: self._optimizer.state_dict(),
-                CHECKPOINT_SCHEDULER_KEYWORD: self._scheduler.state_dict(),
+                CHECKPOINT_SCHEDULER_KEYWORD: self._scheduler.state_dict() if self._scheduler is not None else None,
                 CHECKPOINT_METRICS_KEYWORD: self._metrics,
                 CHECKPOINT_SCALER_KEYWORD: self._scaler.state_dict(),
             }
@@ -430,7 +431,8 @@ class Trainer:
             train_progress.update(1)
 
         train_progress.close()
-        self._scheduler.step()
+        if self._scheduler is not None:
+            self._scheduler.step()
 
     # =========================
     #   ЛОГИКА KEEP_BEST_ON
@@ -497,7 +499,7 @@ class Trainer:
         if mode == "tolerance":
             if val is None:
                 raise ValueError(
-                    f"keep_best_on[{name}]: mode='tolerance', но не задан value"
+                    f"keep_best_on[{name}]: mode='tolerance' but no value given"
                 )
             tol = self._parse_tolerance(val)
             denom = max(abs(best), 1e-12)
@@ -659,6 +661,11 @@ class Trainer:
           - если не задано -> считаем все метрики на всех датасетах;
           - если задано -> каждая метрика считается только на своём датасете.
         """
+        # Краткое саммари накопленных предупреждений перед валидацией (rank 0),
+        # чтобы они не терялись в глухом режиме и не рвали прогрессбар.
+        if ddp.is_main():
+            warncollect.flush()
+
         if not self._test_loaders:
             return
 
@@ -842,11 +849,9 @@ class Trainer:
         else:
             self._current_epoch = ckpt[CHECKPOINT_EPOCH_KEYWORD]
             self._optimizer.load_state_dict(ckpt[CHECKPOINT_OPTIMIZER_KEYWORD])
-            self._scheduler.load_state_dict(
-                CHECKPOINT_SCHEDULER_KEYWORD in ckpt
-                and ckpt[CHECKPOINT_SCHEDULER_KEYWORD]
-                or self._scheduler.state_dict()
-            )
+            if self._scheduler is not None:
+                sched_state = ckpt.get(CHECKPOINT_SCHEDULER_KEYWORD) or self._scheduler.state_dict()
+                self._scheduler.load_state_dict(sched_state)
             if ckpt.get(CHECKPOINT_SCALER_KEYWORD):
                 try:
                     self._scaler.load_state_dict(ckpt[CHECKPOINT_SCALER_KEYWORD])

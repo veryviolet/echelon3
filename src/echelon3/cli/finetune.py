@@ -31,7 +31,8 @@ import sys
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings
+from echelon3 import warncollect
 from echelon3.creator import (
     create_datasets, create_augments, create_preprocesses, create_dataloaders,
     create_trainer, create_net, create_loss, create_optimizer, create_scheduler,
@@ -79,6 +80,7 @@ def finetune_app(cfg: DictConfig):
 
 
 def _finetune(cfg: DictConfig):
+    setup_warnings()  # копить предупреждения, саммари — перед каждой валидацией
     use_ddp = ddp.init_ddp_if_needed()
     _tcfg = cfg.trainer.config if ('trainer' in cfg.keys() and 'config' in cfg.trainer.keys()) else {}
     runtime.setup_fast_matmul(tf32=_tcfg.get('tf32', True),
@@ -97,8 +99,9 @@ def _finetune(cfg: DictConfig):
     print(Fore.CYAN)
     print(f'\n\n{__title__} {__version__}: finetune trainer.\n\n')
 
-    train_augment, test_augment = create_augments(cfg.transform)
-    train_preprocess, test_preprocess = create_preprocesses(cfg.transform)
+    _transform = cfg.transform if 'transform' in cfg.keys() else None
+    train_augment, test_augment = create_augments(_transform)
+    train_preprocess, test_preprocess = create_preprocesses(_transform)
     train_dataset, test_dataset = create_datasets(
         config=cfg.data,
         train_augment=train_augment, test_augment=test_augment,
@@ -131,7 +134,7 @@ def _finetune(cfg: DictConfig):
         print(Fore.CYAN, end="")
 
     losses = create_loss(cfg.loss)
-    metrics = create_metrics(cfg.metrics)
+    metrics = create_metrics(cfg.metrics if 'metrics' in cfg.keys() else None)
 
     # Optimizer: optionally with param groups.
     print(f'--> Initializing optimizer... ')
@@ -157,10 +160,10 @@ def _finetune(cfg: DictConfig):
 
     optimizer = create_optimizer(cfg.optimizer, params)
     print(Fore.LIGHTGREEN_EX, end="")
-    print(f'        {type(optimizer).__name__}({cfg.optimizer.config})')
+    print(f'        {type(optimizer).__name__}({cfg.optimizer.get("config", {})})')
     print(Fore.CYAN, end="")
 
-    scheduler = create_scheduler(cfg.scheduler, optimizer)
+    scheduler = create_scheduler(cfg.scheduler, optimizer) if 'scheduler' in cfg.keys() else None
     ckpt_manager = create_checkpoint_manager(cfg.target)
 
     logger_config = cfg.mlops if 'mlops' in cfg.keys() else None
@@ -192,6 +195,8 @@ def _finetune(cfg: DictConfig):
             os._exit(1)
         raise
     finally:
+        if ddp.is_main():
+            warncollect.flush()  # финальное саммари хвостовых предупреждений
         try:
             trainer.close()
         except Exception:

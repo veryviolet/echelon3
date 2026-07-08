@@ -10,7 +10,8 @@ from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings
+from echelon3 import warncollect
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
 from echelon3.creator import create_net, create_loss, create_optimizer, create_scheduler, create_checkpoint_manager
@@ -28,6 +29,7 @@ def trainer_app(cfg: DictConfig):
 
 def _train(cfg: DictConfig):
 
+    setup_warnings()  # копить предупреждения, саммари — перед каждой валидацией
     use_ddp = ddp.init_ddp_if_needed()
 
     # TF32 matmul + cuDNN autotune (process-level) — до создания сети.
@@ -56,11 +58,11 @@ def _train(cfg: DictConfig):
         print(f'--> DDP: world_size={ddp.world_size()}, backend={torch.distributed.get_backend()}, '
               f'device={device}')
         if 'device_ids' in cfg.keys():
-            print(Fore.YELLOW + '--> DDP: cfg.device_ids игнорируется, '
-                  'используйте CUDA_VISIBLE_DEVICES' + Fore.CYAN)
+            print('--> DDP: cfg.device_ids is ignored; use CUDA_VISIBLE_DEVICES')
 
     print(f'--> Initializing augmentations... ')
-    train_augment, test_augment = create_augments(cfg.transform)
+    _transform = cfg.transform if 'transform' in cfg.keys() else None
+    train_augment, test_augment = create_augments(_transform)
     print(f'--> Train augmentations:')
     print(Fore.LIGHTGREEN_EX, end='')
     for tr in train_augment:
@@ -74,15 +76,15 @@ def _train(cfg: DictConfig):
     print(Fore.CYAN, end='')
 
     print(f'--> Initializing preprocess... ')
-    train_preprocess, test_preprocess = create_preprocesses(cfg.transform)
+    train_preprocess, test_preprocess = create_preprocesses(_transform)
     print(f'--> Train preprocess:')
     print(Fore.LIGHTGREEN_EX, end='')
-    for tr in train_preprocess:
+    for tr in (train_preprocess or []):
         print(f'        {tr}')
     print(Fore.CYAN, end='')
     print(f'--> Test preprocess:')
     print(Fore.LIGHTGREEN_EX, end='')
-    for tr in test_preprocess:
+    for tr in (test_preprocess or []):
         print(f'        {tr}')
     print(Fore.CYAN, end='')
 
@@ -114,7 +116,7 @@ def _train(cfg: DictConfig):
     net = create_net(cfg.net)
     net.to(device)
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(net).__name__}({cfg.net.config})')
+    print(f'        {type(net).__name__}({cfg.net.get("config", {})})')
     print(Fore.CYAN, end='')
 
     if 'weights' in cfg.net.keys():
@@ -132,7 +134,7 @@ def _train(cfg: DictConfig):
     print(Fore.CYAN, end='')
 
     print(f'--> Initializing metrics... ')
-    metrics = create_metrics(cfg.metrics)
+    metrics = create_metrics(cfg.metrics if 'metrics' in cfg.keys() else None)
     print(Fore.LIGHTGREEN_EX, end='')
     for name, m in metrics.items():
         print(f'    {name}: {type(m).__name__}')
@@ -141,14 +143,18 @@ def _train(cfg: DictConfig):
     print(f'--> Initializing optimizer... ')
     optimizer = create_optimizer(cfg.optimizer, net.parameters())
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(optimizer).__name__}({cfg.optimizer.config})')
+    print(f'        {type(optimizer).__name__}({cfg.optimizer.get("config", {})})')
     print(Fore.CYAN, end='')
 
     print(f'--> Initializing learning rate scheduler... ')
-    scheduler = create_scheduler(cfg.scheduler, optimizer)
-    print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(scheduler).__name__}({cfg.scheduler.config})')
-    print(Fore.CYAN, end='')
+    if 'scheduler' in cfg.keys():
+        scheduler = create_scheduler(cfg.scheduler, optimizer)
+        print(Fore.LIGHTGREEN_EX, end='')
+        print(f'        {type(scheduler).__name__}({cfg.scheduler.get("config", {})})')
+        print(Fore.CYAN, end='')
+    else:
+        scheduler = None
+        print(f'--> No scheduler configured (constant LR).')
 
     print(f'--> Initializing checkpoint manager... ')
     ckpt_manager = create_checkpoint_manager(cfg.target)
@@ -194,6 +200,8 @@ def _train(cfg: DictConfig):
             os._exit(1)
         raise
     finally:
+        if ddp.is_main():
+            warncollect.flush()  # финальное саммари хвостовых предупреждений
         try:
             trainer.close()  # погасить воркеров даталоадеров на чистом выходе
         except Exception:

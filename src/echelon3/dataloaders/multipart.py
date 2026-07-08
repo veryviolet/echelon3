@@ -51,7 +51,7 @@ class MultiPartBatchSampler(BatchSampler):
             raise RuntimeError(
                 f"MultiPartBatchSampler: max_part_batch_size <= 0 "
                 f"(max_part={max_part}, quants={self.quants}). "
-                f"Возможно, слишком маленький batch_size или некорректные shares."
+                f"batch_size may be too small, or shares are invalid."
             )
 
         self.unique_batches = (max_part_len + max_part_batch_size - 1) // max_part_batch_size
@@ -67,9 +67,9 @@ class MultiPartBatchSampler(BatchSampler):
 
             if part_len == 0 and self.quants[i] > 0:
                 raise RuntimeError(
-                    f"MultiPartBatchSampler: dataset.part_len({i}) == 0 при batch_size={self.batch_size}, "
+                    f"MultiPartBatchSampler: dataset.part_len({i}) == 0 at batch_size={self.batch_size}, "
                     f"part_share={self.dataset.part_share(i)}, quants[{i}]={self.quants[i]}. "
-                    f"Проверьте конфиг MultiPartDataset и содержимое папки для части {i}."
+                    f"Check the MultiPartDataset config and the folder contents for part {i}."
                 )
 
             part_required_size = self.unique_batches * self.quants[i]
