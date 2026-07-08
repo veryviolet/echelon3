@@ -1301,10 +1301,22 @@ stop. Rule of thumb: <code>num_workers</code> per rank ≈ cores ÷ ranks.</p>
 <code>trainer.config.ddp_find_unused_parameters: false</code> when your graph uses every
 output every step). Each rank trains on its shard and DDP all-reduces gradients.</p>
 <p><strong>Validation is symmetric and sharded.</strong> Every rank evaluates its own
-<code>DistributedSampler</code> shard through the unwrapped network, and the metrics
-aggregate their state across ranks inside <code>compute()</code>. The aggregated values are
-identical on every rank, so the keep-best decision matches everywhere; only
-rank 0 writes the file.</p>
+<code>DistributedSampler</code> shard through the unwrapped network.</p>
+<div class="admonition warning">
+<p class="admonition-title">Custom metrics are not aggregated across ranks</p>
+<p><strong>torchmetrics</strong> metrics reduce their state across ranks inside <code>compute()</code>
+(via <code>dist_reduce_fx</code>), so the aggregated value is identical on every rank and
+the keep-best decision matches everywhere — correct under DDP. <strong>Custom metrics</strong>
+(subclasses of <code>echelon3.metrics.base.Metric</code>) have no distributed reduction, so
+under DDP each rank computes on its own shard only, and keep-best is driven by
+rank 0's shard (rank 0 owns the checkpoint). The selected "best" checkpoint is
+therefore slightly noisy, and per-shard numbers are not the global metric
+(averaging shards is wrong for ratio metrics like IoU). For exact DDP behaviour
+use a torchmetrics-based metric, or give your custom metric a distributed reduce
+of its internal state (all-reduce the accumulators in <code>compute()</code>). Single-GPU
+runs are unaffected.</p>
+</div>
+<p>Only rank 0 writes the checkpoint file.</p>
 <h2 id="logs-and-checkpoints-rank-0-only">Logs and checkpoints: rank 0 only<a class="headerlink" href="#logs-and-checkpoints-rank-0-only" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Rank 0 prints, shows progress bars, and owns the mlops logger; other ranks
