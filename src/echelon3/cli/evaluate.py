@@ -8,6 +8,8 @@ from colorama import Fore, Style
 
 from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
+from echelon3 import ddp
+from echelon3 import runtime
 from echelon3.cli import add_cwd_to_sys_path
 
 from echelon3.creator import (
@@ -46,15 +48,9 @@ def evaluate_app(cfg: DictConfig):
     print(f"--> Loading latest checkpoint... ")
     print(Fore.LIGHTGREEN_EX, end="")
     ckpt, num = ckpt_manager.load_latest_checkpoint()
-    try:
-        net.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
-        if hasattr(net, "reread_hypers"):
-            net.reread_hypers(**cfg.net.config)
-    except Exception:
-        net = torch.nn.DataParallel(net)
-        net.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
-        if hasattr(net.module, "reread_hypers"):
-            net.module.reread_hypers(**cfg.net.config)
+    ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
+    if hasattr(net, "reread_hypers"):
+        net.reread_hypers(**cfg.net.config)
 
     net.eval()
     print(f"--> Loaded {num} checkpoint. ")
@@ -121,7 +117,15 @@ def evaluate_app(cfg: DictConfig):
     print(Fore.CYAN, end="")
 
     print(f"--> Evaluating on validation (data.test)... ")
-    val_metric = evaluator.evaluate()
+    # TF32 + AMP-инференс: по умолчанию bf16 на поддерживающих GPU (precision: fp32
+    # чтобы выключить). autocast поверх верхнего вызова покрывает все Evaluator'ы.
+    runtime.setup_fast_matmul(
+        tf32=cfg.get("tf32", True), cudnn_benchmark=cfg.get("cudnn_benchmark", True)
+    )
+    _dtype = runtime.resolve_amp_dtype(cfg.get("precision", "auto"), device=device)
+    print(f"--> Precision: {runtime.precision_label(_dtype)}")
+    with torch.autocast("cuda", dtype=_dtype or torch.bfloat16, enabled=_dtype is not None):
+        val_metric = evaluator.evaluate()
 
     print(Fore.LIGHTGREEN_EX, end="")
     print(f"Validation {cfg.evaluator.metric}: {val_metric}")

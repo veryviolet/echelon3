@@ -1,50 +1,51 @@
-# Multi-GPU Training
+# Multi-GPU Training & Precision
 
-echelon3 trains on multiple GPUs in two ways, and it picks between them
-**automatically**:
+echelon3 runs multi-GPU training with **built-in DistributedDataParallel
+(DDP)** — one process per GPU. You do **not** need `torchrun`: name the GPUs and
+echelon3 spawns the workers itself.
 
-- **DistributedDataParallel (DDP)** — one process per GPU, launched with
-  `torchrun`. This is the fast path.
-- **DataParallel** — a single process driving several GPUs, used as a fallback
-  when you run without `torchrun`.
+## Multi-GPU in one command
 
-You do not toggle a config flag. The trainer detects `torchrun` and switches
-mode; the same config runs either way.
+```bash
+echelon3-train --config-dir configs --config-name my_experiment gpus=[0,1,2,3]
+```
 
-## How DDP is activated
+`gpus` is a **root config key**. Set it in the config, or override it on the CLI.
+Leave it out and echelon3 uses **every visible GPU on the node**:
 
-`echelon3.ddp.init_ddp_if_needed()` runs at the top of `echelon3-train`. It
-checks for the environment variables `torchrun` sets — `RANK`, `WORLD_SIZE`,
-`LOCAL_RANK` — and if they are present, initializes the process group (`nccl` on
-CUDA, `gloo` otherwise) and binds the process to `cuda:${LOCAL_RANK}`. No
-variables, no DDP.
+```yaml
+gpus: [0, 1, 2, 3]   # optional; default = all GPUs on this node
+```
 
-## Launching
+Under the hood echelon3 calls PyTorch's own launcher (`elastic_launch`) to start
+one worker per GPU, wiring up `RANK` / `LOCAL_RANK` / `WORLD_SIZE` / `MASTER_*`
+and the process group — exactly what `torchrun` does, without you typing it. With
+a single GPU (or on CPU) nothing is spawned and training runs in-process.
 
-Use `torchrun` and point it at the installed console script:
+!!! note "No DataParallel"
+    DataParallel has been removed (0.5.0). Multiple GPUs always run as DDP, one
+    process each; a single process only ever drives one GPU. The old `device_ids`
+    key no longer selects multiple GPUs — use `gpus`.
+
+## torchrun / multi-node still works
+
+The environment-variable path is unchanged, so `torchrun` (and SLURM `srun`)
+remain available for multi-node or elastic jobs. If echelon3 finds `RANK` in the
+environment it assumes it is already a worker and does not spawn again:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 \
     $(which echelon3-train) --config-dir configs --config-name my_experiment
 ```
 
-- `CUDA_VISIBLE_DEVICES` selects which physical GPUs take part.
-- `--nproc_per_node` is the number of processes — one per visible GPU.
-- `$(which echelon3-train)` gives `torchrun` the path to the entry point;
-  everything after it is passed through to Hydra as usual.
-
-!!! warning "`device` / `device_ids` are ignored under DDP"
-    With `torchrun`, each process owns exactly one GPU chosen by `LOCAL_RANK`, so
-    the `device` and `device_ids` config keys do nothing — GPU selection is
-    entirely `CUDA_VISIBLE_DEVICES`. The trainer prints a yellow notice if it
-    sees `device_ids` in a DDP run.
+For a single node, `gpus=[...]` and `torchrun` are equivalent — prefer `gpus` for
+the shorter command; reach for `torchrun` when you span nodes.
 
 ## Batch size is global
 
 `dataloaders.train.config.batch_size` is the **global** batch size — the total
-across all processes, exactly as it would be under DataParallel. Under DDP,
-`create_dataloaders` divides it by the world size and installs a
-`DistributedSampler`:
+across all processes. Under DDP, `create_dataloaders` divides it by the world
+size and installs a `DistributedSampler`:
 
 ```yaml
 dataloaders:
@@ -59,64 +60,69 @@ dataloaders:
 ```
 
 !!! warning "It must divide evenly"
-    If `batch_size` is not divisible by the world size, the run fails fast with a
-    `ValueError`. Pick a global batch that is a multiple of `--nproc_per_node`.
+    If `batch_size` is not divisible by the number of GPUs, the run fails fast
+    with a `ValueError`. Pick a global batch that is a multiple of `len(gpus)`.
 
 The test loader is treated the same way: its `batch_size` is global and divided
-per rank, and `num_workers` is capped at 4 per process during validation.
+per rank.
 
 ## What each rank does
 
 The network is wrapped in `DistributedDataParallel` (with
-`find_unused_parameters=True` by default; override via
+`find_unused_parameters=True` by default; set
 `trainer.config.ddp_find_unused_parameters: false` when your graph uses every
-output every step). Training runs the standard loop on each rank's shard, and
-gradients are all-reduced by DDP.
+output every step). Each rank trains on its shard and DDP all-reduces gradients.
 
 **Validation is symmetric and sharded.** Every rank evaluates its own
-`DistributedSampler` shard through the unwrapped network, and the
-torchmetrics-style metrics aggregate their state across ranks inside
-`compute()`. Because the aggregated values are identical on every rank, the
-keep-best decision is the same everywhere; only rank 0 actually writes the file.
+`DistributedSampler` shard through the unwrapped network, and the metrics
+aggregate their state across ranks inside `compute()`. The aggregated values are
+identical on every rank, so the keep-best decision matches everywhere; only
+rank 0 writes the file.
 
 ## Logs and checkpoints: rank 0 only
 
-To keep output and disk writes clean, non-main ranks are muted:
-
 - Rank 0 prints, shows progress bars, and owns the mlops logger; other ranks
-  redirect stdout to `/dev/null`, disable their `tqdm` bars, and get a no-op
-  logger.
-- `save_checkpoint` returns immediately on non-main ranks — checkpoints are
-  written only by rank 0.
+  redirect stdout to `/dev/null`, disable `tqdm`, and get a no-op logger.
+- `save_checkpoint` returns immediately on non-main ranks — only rank 0 writes.
 
-Checkpoints are format-compatible between DDP and DataParallel: both store the
-`state_dict` with a `module.` prefix, so you can resume a DDP run under
-DataParallel and vice versa. Resuming works automatically from the highest
-`checkpoint-N.tar` in `target.path`.
+Checkpoints store the **unwrapped** `state_dict` (no `module.` prefix), so a file
+is identical whether it came from a single-GPU or a multi-GPU run and resumes
+under either. Older checkpoints that still carry a `module.` prefix load fine —
+it is stripped automatically.
 
-## The DataParallel fallback
+## Mixed precision (AMP) & TF32
 
-Run the same config **without** `torchrun` and nothing distributed happens: the
-trainer wraps the network in `torch.nn.DataParallel(net, device_ids=...)` using
-the `device` / `device_ids` config keys, and `batch_size` is the whole batch that
-DataParallel scatters across the listed GPUs.
+Training uses **bf16 automatic mixed precision by default** on GPUs that support
+it (Hopper / Ampere and newer); on CPU or unsupported GPUs it stays fp32. On
+modern hardware this is a large speedup at negligible quality cost.
+
+Control it in `trainer.config`:
 
 ```yaml
-device: cuda
-device_ids: [0, 1, 2, 3]
+trainer:
+  config:
+    precision: bf16        # auto (default) | bf16 | fp16 | fp32
+    tf32: true             # TF32 matmul on Ampere+ (default true)
+    cudnn_benchmark: true  # autotune conv algorithms for fixed input sizes (default true)
 ```
 
-```bash
-echelon3-train --config-dir configs --config-name my_experiment
-```
+- `auto` / unset → bf16 when supported, else fp32.
+- **`fp32` → disables autocast** (bit-for-bit the pre-0.5.0 behavior). This is how
+  you keep training in plain fp32.
+- `fp16` → autocast + `GradScaler`. Not supported with closure optimizers
+  (`SAMOptimizer` / `LBFGS`, which do a double backward) — those fall back to
+  bf16 automatically.
 
-DDP is preferred for real multi-GPU jobs — DataParallel is simpler to launch but
-slower and single-process. Use it for quick two-GPU experiments; reach for
-`torchrun` when throughput matters.
+!!! warning "The default flipped to bf16 in 0.5.0"
+    Results differ from old fp32 runs (usually negligibly, and faster). Set
+    `precision: fp32` to reproduce fp32 exactly.
+
+`echelon3-evaluate` and `echelon3-run` autocast the same way (default bf16); set
+`precision: fp32` at the **config root** to force fp32 for those.
 
 ## Next
 
-- [Config Schema](../reference/config-schema.md) — the `dataloaders`, `device`,
+- [Config Schema](../reference/config-schema.md) — the `dataloaders`, `gpus`,
   and `trainer` sections.
 - [First Run](../getting-started/first-run.md) — a single-GPU baseline first.
 </content>

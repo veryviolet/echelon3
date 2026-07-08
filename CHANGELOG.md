@@ -4,6 +4,35 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.5.0 — 2026-07-08
+
+Multi-GPU and performance release. **Breaking**: DataParallel is gone and mixed
+precision defaults to bf16.
+
+### Changed
+
+- **Multi-GPU is built-in DDP, launched from the CLI — no `torchrun` needed.**
+  Pass `gpus=[0,1,2,3]` (a root config key; default = all visible GPUs on the
+  node) and echelon3 spawns one DDP worker per GPU via PyTorch's `elastic_launch`,
+  wiring up `RANK`/`LOCAL_RANK`/`WORLD_SIZE`/`MASTER_*` itself. `torchrun` and
+  multi-node runs still work unchanged through the environment-variable path.
+  Applies to `echelon3-train` and `echelon3-finetune`.
+- **Mixed precision (AMP) on by default.** Training, `evaluate` and `run` autocast
+  in **bf16** on capable GPUs (fp32 on CPU / unsupported GPUs). Set
+  `trainer.config.precision: fp32` to restore full fp32. `precision: fp16` uses a
+  `GradScaler`; with closure optimizers (SAM/LBFGS, which double-backward) it
+  falls back to bf16. TF32 matmul and `cudnn.benchmark` are on by default
+  (`trainer.config.tf32`, `trainer.config.cudnn_benchmark`).
+- Checkpoints save the **unwrapped** `state_dict` (no `module.` prefix); older
+  `module.`-prefixed checkpoints still load (prefix stripped automatically).
+
+### Removed
+
+- **DataParallel.** Multiple GPUs always run as DDP; a single process drives one
+  GPU. `device_ids` no longer selects multiple GPUs — use `gpus`. The
+  `run` / `evaluate` / `export` CLIs load checkpoints directly instead of wrapping
+  the network in `DataParallel`.
+
 ## 0.4.1 — 2026-07-07
 
 ### Fixed

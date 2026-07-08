@@ -9,7 +9,8 @@ from omegaconf import DictConfig
 from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
-from echelon3.cli import add_cwd_to_sys_path
+from echelon3 import runtime
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
 from echelon3.creator import create_net, create_loss, create_optimizer, create_scheduler, create_checkpoint_manager
@@ -18,8 +19,21 @@ from echelon3.creator import create_metrics, create_mlops_logger, create_univers
 
 @hydra.main(version_base=None, config_path=None)
 def trainer_app(cfg: DictConfig):
+    # Встроенный DDP: если запрошено >1 GPU и мы не воркер — порождаем по процессу
+    # на GPU (замена torchrun) и выходим; иначе обучаемся в этом процессе.
+    if maybe_launch_ddp(cfg, _train):
+        return
+    _train(cfg)
+
+
+def _train(cfg: DictConfig):
 
     use_ddp = ddp.init_ddp_if_needed()
+
+    # TF32 matmul + cuDNN autotune (process-level) — до создания сети.
+    _tcfg = cfg.trainer.config if ('trainer' in cfg.keys() and 'config' in cfg.trainer.keys()) else {}
+    runtime.setup_fast_matmul(tf32=_tcfg.get('tf32', True),
+                              cudnn_benchmark=_tcfg.get('cudnn_benchmark', True))
     if use_ddp:
         # Один процесс = один GPU; cfg.device/device_ids игнорируются, видимость
         # GPU задаётся через CUDA_VISIBLE_DEVICES перед torchrun.

@@ -17,11 +17,13 @@ from echelon3.checkpoint.manager import (
     CHECKPOINT_OPTIMIZER_KEYWORD,
     CHECKPOINT_SCHEDULER_KEYWORD,
     CHECKPOINT_METRICS_KEYWORD,
+    CHECKPOINT_SCALER_KEYWORD,
 )
 
 from echelon3.mlops.basic import MLOpsLogger
 
 from echelon3 import ddp
+from echelon3 import runtime
 
 
 class _NullLogger:
@@ -131,18 +133,21 @@ class Trainer:
             self._primary_test_name = "test" if test_dataloader is not None else None
 
         self._device = device
+        net = net.to(device)
         if ddp.is_ddp():
-            # DDP: один процесс = один GPU. Сеть должна быть на устройстве ДО обёртки.
+            # DDP: один процесс = один GPU (сеть уже на устройстве).
             # find_unused_parameters=True по умолчанию: у некоторых сетей часть
             # выходов может не участвовать в лоссе на отдельных шагах.
-            net = net.to(device)
             self._net = torch.nn.parallel.DistributedDataParallel(
                 net,
                 device_ids=[device.index] if device.type == "cuda" else None,
                 find_unused_parameters=bool(kwargs.get("ddp_find_unused_parameters", True)),
             )
         else:
-            self._net = torch.nn.DataParallel(net, device_ids=device_ids)
+            # Один GPU / CPU — без обёртки. DataParallel убран; несколько GPU
+            # запускаются встроенным DDP-лаунчером (см. cli.maybe_launch_ddp),
+            # т.е. в каждом процессе сеть одноустройственная.
+            self._net = net
         self._eval_net = None  # развёрнутая сеть для rank0-валидации в DDP
         self._losses = losses
         self._metrics = metrics
@@ -159,6 +164,28 @@ class Trainer:
         self._metrics = {name: m.to(self._device) for name, m in self._metrics.items()}
         self._float_labels = float_labels
         self._reset = reset
+
+        # --- mixed precision (AMP) --- привязано к фактическому устройству.
+        self._amp_dtype = runtime.resolve_amp_dtype(kwargs.get("precision", "auto"), device=self._device)
+        # fp16 требует GradScaler, а он не сочетается с closure-оптимизаторами
+        # (SAM/LBFGS сами делают двойной backward + ручную арифметику градиентов);
+        # откатываемся на bf16.
+        if self._amp_dtype == torch.float16 and self._optimizer_uses_closure():
+            bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+            self._amp_dtype = torch.bfloat16 if bf16_ok else None
+            if ddp.is_main():
+                print(f"--> AMP: fp16 + {type(self._optimizer).__name__} (closure) не поддержан; "
+                      f"использую {runtime.precision_label(self._amp_dtype)}")
+        self._amp_enabled = self._amp_dtype is not None
+        # dtype для autocast; когда AMP выключен — значение игнорируется (enabled=False).
+        self._autocast_dtype = self._amp_dtype if self._amp_enabled else torch.bfloat16
+        self._scaler = torch.amp.GradScaler("cuda", enabled=(self._amp_dtype == torch.float16))
+        if ddp.is_main():
+            print(f"--> Precision: {runtime.precision_label(self._amp_dtype)} "
+                  f"(autocast {'on' if self._amp_enabled else 'off'})")
+            if self._amp_enabled:
+                print(Fore.YELLOW + "--> AMP включён: численность отличается от fp32-прогонов "
+                      "(precision: fp32 чтобы выключить)" + Fore.CYAN)
 
         # metrics_on может прийти как DictConfig/Mapping
         raw_metrics_on = kwargs.get("metrics_on", None)
@@ -216,10 +243,11 @@ class Trainer:
         self._ckpt_manager.save_checkpoint(
             {
                 CHECKPOINT_EPOCH_KEYWORD: self._current_epoch,
-                CHECKPOINT_MODEL_KEYWORD: self._net.state_dict(),
+                CHECKPOINT_MODEL_KEYWORD: ddp.state_dict_for_save(self._net),
                 CHECKPOINT_OPTIMIZER_KEYWORD: self._optimizer.state_dict(),
                 CHECKPOINT_SCHEDULER_KEYWORD: self._scheduler.state_dict(),
                 CHECKPOINT_METRICS_KEYWORD: self._metrics,
+                CHECKPOINT_SCALER_KEYWORD: self._scaler.state_dict(),
             }
         )
 
@@ -242,34 +270,45 @@ class Trainer:
     def one_step_train(self, source, labels):
         def closure(**kwargs):
             self._optimizer.zero_grad(set_to_none=True)
-            predictions = self._net(source)
+            with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
+                predictions = self._net(source)
 
-            if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
-                    and len(predictions.shape) > len(labels.shape):
-                while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
-                    predictions = predictions.squeeze(-1)
+                if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
+                        and len(predictions.shape) > len(labels.shape):
+                    while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
+                        predictions = predictions.squeeze(-1)
 
-            losses_values = {
-                name: (
-                    loss[0](predictions, labels.float() if self._float_labels else labels),
-                    loss[1],
+                losses_values = {
+                    name: (
+                        loss[0](predictions, labels.float() if self._float_labels else labels),
+                        loss[1],
+                    )
+                    for name, loss in self._losses.items()
+                }
+                total_loss = torch.sum(
+                    torch.stack([ls[0] * ls[1] for ls in losses_values.values()])
                 )
-                for name, loss in self._losses.items()
-            }
-            total_loss = torch.sum(
-                torch.stack([ls[0] * ls[1] for ls in losses_values.values()])
-            )
-            total_loss.backward()
+            # backward — вне autocast; при fp16 масштабируем градиенты скейлером.
+            if self._scaler.is_enabled():
+                self._scaler.scale(total_loss).backward()
+            else:
+                total_loss.backward()
             self.losses_without_weights = {m: v[0] for m, v in losses_values.items()}
             self._logger.log_train_data(self._global_step, source, labels, predictions)
             self._logger.log_train_losses(self._global_step, self.losses_without_weights)
             return total_loss
 
         if self._optimizer_uses_closure():
+            # SAM/LBFGS: scaler всегда выключен (fp16 откатывается на bf16), поэтому
+            # двойной forward/backward внутри closure идёт как раньше.
             self._optimizer.step(closure)
         else:
             _ = closure()
-            self._optimizer.step()
+            if self._scaler.is_enabled():
+                self._scaler.step(self._optimizer)
+                self._scaler.update()
+            else:
+                self._optimizer.step()
 
     def initialize_network(self):
         self._net.to(self._device)
@@ -524,20 +563,23 @@ class Trainer:
 
     def one_step_validate(self, source, labels):
         net = self._eval_net if self._eval_net is not None else self._net
-        predictions = net(source)
+        with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
+            predictions = net(source)
 
-        if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
-                and len(predictions.shape) > len(labels.shape):
-            while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
-                predictions = predictions.squeeze(-1)
+            if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
+                    and len(predictions.shape) > len(labels.shape):
+                while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
+                    predictions = predictions.squeeze(-1)
 
-        losses_values = {
-            name: (
-                loss[0](predictions, labels.float() if self._float_labels else labels),
-                loss[1],
-            )
-            for name, loss in self._losses.items()
-        }
+            losses_values = {
+                name: (
+                    loss[0](predictions, labels.float() if self._float_labels else labels),
+                    loss[1],
+                )
+                for name, loss in self._losses.items()
+            }
+        # Метрики считаем на fp32: после autocast выходы могут быть bf16/fp16.
+        predictions = runtime.to_float32(predictions)
         self._logger.log_test_data(self._global_step, source, labels, predictions)
         return predictions, losses_values
 
@@ -761,10 +803,8 @@ class Trainer:
 
     def load_from_checkpoint(self):
         ckpt, num = self._ckpt_manager.load_latest_checkpoint()
-        try:
-            self._net.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
-        except Exception:  # DataParallel
-            self._net.module.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
+        # Снимает устаревший префикс 'module.' (старые DataParallel/DDP-чекпоинты).
+        ddp.load_state_dict_flexible(self._net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
         if self._reset:
             print("--> Resetting.\n")
@@ -778,5 +818,10 @@ class Trainer:
                 and ckpt[CHECKPOINT_SCHEDULER_KEYWORD]
                 or self._scheduler.state_dict()
             )
+            if ckpt.get(CHECKPOINT_SCALER_KEYWORD):
+                try:
+                    self._scaler.load_state_dict(ckpt[CHECKPOINT_SCALER_KEYWORD])
+                except Exception:
+                    pass
 
         return num

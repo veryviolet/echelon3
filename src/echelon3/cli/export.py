@@ -5,6 +5,7 @@ from colorama import Fore, Style
 
 from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
+from echelon3 import ddp
 from echelon3.cli import add_cwd_to_sys_path
 
 from echelon3.creator import create_net, create_checkpoint_manager, create_exporters
@@ -36,12 +37,8 @@ def exporter_app(cfg: DictConfig):
         print(f'--> Loading latest checkpoint... ')
         print(Fore.LIGHTGREEN_EX, end='')
         ckpt, num = ckpt_manager.load_latest_checkpoint(cpu_only=True)
-        try:
-            net.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
-        except Exception:
-            # чекпоинт формата DataParallel/DDP (ключи с префиксом module.)
-            newnet = torch.nn.DataParallel(net)
-            newnet.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
+        # Снимает устаревший префикс 'module.' старых DataParallel/DDP-чекпоинтов.
+        ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
         print(f'--> Loaded {num} checkpoint. ')
         print(Fore.CYAN, end='')

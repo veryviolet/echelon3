@@ -76,7 +76,24 @@ def barrier():
 
 
 def unwrap(net: torch.nn.Module) -> torch.nn.Module:
-    """Underlying module для DataParallel/DDP, иначе сама сеть."""
+    """Underlying module для DDP-обёртки, иначе сама сеть."""
     if isinstance(net, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)):
         return net.module
     return net
+
+
+def state_dict_for_save(net: torch.nn.Module) -> dict:
+    """State dict БЕЗ префикса 'module.' — чекпоинты не зависят от обёртки
+    (DDP/одиночный процесс дают одинаковый файл)."""
+    return unwrap(net).state_dict()
+
+
+def load_state_dict_flexible(net: torch.nn.Module, state_dict: dict, strict: bool = True):
+    """Грузит веса в net, снимая устаревший префикс 'module.' (старые чекпоинты
+    формата DataParallel/DDP), в развёрнутый модуль."""
+    if any(k.startswith("module.") for k in state_dict):
+        state_dict = {
+            (k[len("module."):] if k.startswith("module.") else k): v
+            for k, v in state_dict.items()
+        }
+    return unwrap(net).load_state_dict(state_dict, strict=strict)

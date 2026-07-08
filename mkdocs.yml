@@ -55,7 +55,7 @@ nav:
       - Anatomy of a Run: concepts/run-anatomy.md
   - Guide:
       - Extending with Your Own Code: guide/extending.md
-      - Multi-GPU (DDP): guide/ddp.md
+      - Multi-GPU & Precision: guide/ddp.md
       - Exporting to ONNX: guide/export.md
   - Reference:
       - Config Schema: reference/config-schema.md

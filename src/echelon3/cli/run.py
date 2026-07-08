@@ -5,6 +5,8 @@ from colorama import Fore, Style
 
 from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
+from echelon3 import ddp
+from echelon3 import runtime
 from echelon3.cli import add_cwd_to_sys_path
 
 from echelon3.creator import create_net, create_checkpoint_manager
@@ -37,11 +39,8 @@ def runner_app(cfg: DictConfig):
         print(f'--> Loading latest checkpoint... ')
         print(Fore.LIGHTGREEN_EX, end='')
         ckpt, num = ckpt_manager.load_latest_checkpoint()
-        try:
-            net.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
-        except Exception:
-            newnet = torch.nn.DataParallel(net)
-            newnet.load_state_dict(ckpt[CHECKPOINT_MODEL_KEYWORD])
+        # Снимает устаревший префикс 'module.' старых DataParallel/DDP-чекпоинтов.
+        ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
         net.to(device)
         net.eval()
@@ -64,7 +63,14 @@ def runner_app(cfg: DictConfig):
     runner = create_universal(cfg.runner)
 
     print(f'--> Processing ... ')
-    runner.process(model=net, preprocess=preprocess, postprocess=postprocess)
+    # TF32 + AMP-инференс (по умолчанию bf16; precision: fp32 чтобы выключить).
+    runtime.setup_fast_matmul(
+        tf32=cfg.get('tf32', True), cudnn_benchmark=cfg.get('cudnn_benchmark', True)
+    )
+    _dtype = runtime.resolve_amp_dtype(cfg.get('precision', 'auto'), device=device)
+    print(f'--> Precision: {runtime.precision_label(_dtype)}')
+    with torch.autocast('cuda', dtype=_dtype or torch.bfloat16, enabled=_dtype is not None):
+        runner.process(model=net, preprocess=preprocess, postprocess=postprocess)
 
     print(Style.RESET_ALL)
 

@@ -25,8 +25,13 @@ import torch
 from omegaconf import DictConfig
 from colorama import Fore, Style
 
+import os
+import sys
+
 from echelon3 import __title__, __version__
-from echelon3.cli import add_cwd_to_sys_path
+from echelon3 import ddp
+from echelon3 import runtime
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp
 from echelon3.creator import (
     create_datasets, create_augments, create_preprocesses, create_dataloaders,
     create_trainer, create_net, create_loss, create_optimizer, create_scheduler,
@@ -67,9 +72,27 @@ def _load_init_weights(net: torch.nn.Module, ckpt_path: str, strict: bool = Fals
 
 @hydra.main(version_base=None, config_path=None)
 def finetune_app(cfg: DictConfig):
-    device = torch.device(cfg.device if 'device' in cfg.keys() else 'cuda') \
-        if torch.cuda.is_available() else torch.device('cpu')
-    device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
+    # Встроенный DDP: несколько GPU — порождаем воркеры (замена torchrun) и выходим.
+    if maybe_launch_ddp(cfg, _finetune):
+        return
+    _finetune(cfg)
+
+
+def _finetune(cfg: DictConfig):
+    use_ddp = ddp.init_ddp_if_needed()
+    _tcfg = cfg.trainer.config if ('trainer' in cfg.keys() and 'config' in cfg.trainer.keys()) else {}
+    runtime.setup_fast_matmul(tf32=_tcfg.get('tf32', True),
+                              cudnn_benchmark=_tcfg.get('cudnn_benchmark', True))
+    if use_ddp:
+        device = torch.device(f'cuda:{ddp.local_rank()}') \
+            if torch.cuda.is_available() else torch.device('cpu')
+        device_ids = None
+        if not ddp.is_main():
+            sys.stdout = open(os.devnull, 'w')
+    else:
+        device = torch.device(cfg.device if 'device' in cfg.keys() else 'cuda') \
+            if torch.cuda.is_available() else torch.device('cpu')
+        device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
     print(Fore.CYAN)
     print(f'\n\n{__title__} {__version__}: finetune trainer.\n\n')
@@ -141,7 +164,8 @@ def finetune_app(cfg: DictConfig):
     ckpt_manager = create_checkpoint_manager(cfg.target)
 
     logger_config = cfg.mlops if 'mlops' in cfg.keys() else None
-    mlops_logger = create_mlops_logger(cfg.target, logger_config)
+    mlops_logger = create_mlops_logger(cfg.target, logger_config) \
+        if (not use_ddp or ddp.is_main()) else None
 
     print(f'--> Initializing trainer... ')
     trainer = create_trainer(
@@ -152,7 +176,10 @@ def finetune_app(cfg: DictConfig):
     )
 
     print(f'--> Training... ')
-    trainer.train()
+    try:
+        trainer.train()
+    finally:
+        ddp.shutdown()
 
     print(Style.RESET_ALL)
 
