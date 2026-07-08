@@ -4,6 +4,27 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.0 — 2026-07-08
+
+### Added
+
+- **`torch.compile` support (experimental, opt-in).** `trainer.config.compile: true`
+  (with optional `compile_mode`) compiles the network — kernel fusion to cut launch
+  overhead, the lever for small nets that under-use a big GPU where bf16 does
+  nothing (launch-bound, not compute-bound). Compiled before the DDP wrapper;
+  `ddp.unwrap()` and checkpoint save/load now also strip torch.compile's
+  `_orig_mod.` prefix, so checkpoints stay interchangeable with uncompiled runs.
+  Off by default; verified single-GPU **and on 4×H200 DDP** (trains + checkpoints
+  round-trip). The actual speedup and any shape-driven recompiles are
+  model-dependent (see `guide/ddp.md`).
+
+### Changed
+
+- **`PairTrainer` calls the network positionally** — `net(base, query, True)`
+  instead of `net(base, query, return_features=True)`. Pair nets name the third
+  argument differently (`return_features`, `return_intermediates`, …); passing it
+  by position keeps the trainer agnostic to the name.
+
 ## 0.6.0 — 2026-07-08
 
 ### Added

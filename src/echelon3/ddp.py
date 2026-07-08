@@ -76,9 +76,15 @@ def barrier():
 
 
 def unwrap(net: torch.nn.Module) -> torch.nn.Module:
-    """Underlying module для DDP-обёртки, иначе сама сеть."""
-    if isinstance(net, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)):
-        return net.module
+    """Исходная сеть под обёртками DDP/DataParallel и torch.compile
+    (``OptimizedModule._orig_mod``), снятыми в любом порядке."""
+    for _ in range(4):  # страховка от неожиданной вложенности
+        if isinstance(net, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)):
+            net = net.module
+        elif hasattr(net, "_orig_mod"):  # torch.compile OptimizedModule
+            net = net._orig_mod
+        else:
+            break
     return net
 
 
@@ -89,11 +95,22 @@ def state_dict_for_save(net: torch.nn.Module) -> dict:
 
 
 def load_state_dict_flexible(net: torch.nn.Module, state_dict: dict, strict: bool = True):
-    """Грузит веса в net, снимая устаревший префикс 'module.' (старые чекпоинты
-    формата DataParallel/DDP), в развёрнутый модуль."""
-    if any(k.startswith("module.") for k in state_dict):
-        state_dict = {
-            (k[len("module."):] if k.startswith("module.") else k): v
-            for k, v in state_dict.items()
-        }
+    """Грузит веса в развёрнутый модуль, снимая с ключей префиксы обёрток —
+    'module.' (DataParallel/DDP) и '_orig_mod.' (torch.compile), в любом порядке
+    и вложенности, так что чекпоинты взаимозаменяемы между обёрнутыми и голыми
+    прогонами."""
+    _prefixes = ("module.", "_orig_mod.")
+
+    def _strip(k: str) -> str:
+        changed = True
+        while changed:
+            changed = False
+            for p in _prefixes:
+                if k.startswith(p):
+                    k = k[len(p):]
+                    changed = True
+        return k
+
+    if any(any(k.startswith(p) for p in _prefixes) for k in state_dict):
+        state_dict = {_strip(k): v for k, v in state_dict.items()}
     return unwrap(net).load_state_dict(state_dict, strict=strict)

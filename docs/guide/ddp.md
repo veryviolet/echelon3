@@ -120,6 +120,32 @@ trainer:
 `echelon3-evaluate` and `echelon3-run` autocast the same way (default bf16); set
 `precision: fp32` at the **config root** to force fp32 for those.
 
+## torch.compile (experimental)
+
+bf16 only speeds up **compute-bound** work. A small network on a big GPU is often
+**launch-bound** instead — dominated by per-kernel launch overhead, with the GPU
+idle between many tiny kernels — and there bf16 buys nothing. The lever is
+`torch.compile`, which fuses kernels and cuts the launch count:
+
+```yaml
+trainer:
+  config:
+    compile: true             # off by default
+    compile_mode: null        # null | "reduce-overhead" | "max-autotune"
+```
+
+The network is compiled before the DDP wrapper; `ddp.unwrap()` and checkpoints
+strip the resulting `_orig_mod.` prefix, so checkpoints stay interchangeable with
+uncompiled runs. The first few steps recompile (warmup) — measure steady-state,
+not iteration 1.
+
+!!! warning "Experimental"
+    Verified single-GPU and on 4×H200 DDP (trains + checkpoints round-trip). The
+    actual speedup is model-dependent — confirm on your model (watch for
+    shape-driven recompiles, and closure optimizers like SAM). Whether a workload
+    is launch-bound is worth checking first (`nvidia-smi dmon -s pu`: power well
+    under TDP ⇒ the GPU is starved, and `compile` is the right lever).
+
 ## Next
 
 - [Config Schema](../reference/config-schema.md) — the `dataloaders`, `gpus`,

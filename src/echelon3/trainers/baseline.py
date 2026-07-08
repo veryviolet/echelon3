@@ -134,6 +134,19 @@ class Trainer:
 
         self._device = device
         net = net.to(device)
+
+        # torch.compile (opt-in, EXPERIMENTAL): fuses kernels to cut launch
+        # overhead — the lever for small nets that under-use big GPUs (bf16 does
+        # nothing for launch-bound work). Compiled BEFORE the DDP wrapper;
+        # ddp.unwrap() / checkpoints strip the resulting _orig_mod. Off by default.
+        self._compiled = bool(kwargs.get("compile", False))
+        if self._compiled:
+            compile_mode = kwargs.get("compile_mode", None)
+            net = torch.compile(net, mode=compile_mode) if compile_mode else torch.compile(net)
+            if ddp.is_main():
+                print(f"--> torch.compile: on (mode={compile_mode or 'default'}) — "
+                      "EXPERIMENTAL; first steps recompile")
+
         if ddp.is_ddp():
             # DDP: один процесс = один GPU (сеть уже на устройстве).
             # find_unused_parameters=True по умолчанию: у некоторых сетей часть
