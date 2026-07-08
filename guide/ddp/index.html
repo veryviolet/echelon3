@@ -857,10 +857,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#torchcompile-experimental" class="md-nav__link">
+  <a href="#torchcompile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        torch.compile (experimental)
+        torch.compile
       
     </span>
   </a>
@@ -1185,10 +1185,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#torchcompile-experimental" class="md-nav__link">
+  <a href="#torchcompile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        torch.compile (experimental)
+        torch.compile
       
     </span>
   </a>
@@ -1277,6 +1277,18 @@ with a <code>ValueError</code>. Pick a global batch that is a multiple of <code>
 </div>
 <p>The test loader is treated the same way: its <code>batch_size</code> is global and divided
 per rank.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>num_workers</code> / <code>prefetch_factor</code> are per-rank</p>
+<p>Unlike <code>batch_size</code>, the DataLoader worker count is <strong>not</strong> divided — every
+rank spins up <code>num_workers</code> workers, each prefetching <code>prefetch_factor</code>
+batches. With all ranks on one node, host RAM scales as
+<code>ranks × num_workers × prefetch_factor × batch</code>, so a value sized for a single
+GPU multiplies under DDP. If it exceeds RAM the OOM-killer strikes a worker or
+a rank; the launcher now fails fast with a hint (and prints the batch-prefetch
+total at startup) instead of hanging silently — but the fix is to lower
+<code>num_workers</code> / <code>prefetch_factor</code>. Set <code>ECHELON3_DDP_TIMEOUT_MIN</code> to shrink the
+process-group timeout backstop if a genuine desync should surface faster.</p>
+</div>
 <h2 id="what-each-rank-does">What each rank does<a class="headerlink" href="#what-each-rank-does" title="Permanent link">&para;</a></h2>
 <p>The network is wrapped in <code>DistributedDataParallel</code> (with
 <code>find_unused_parameters=True</code> by default; set
@@ -1323,7 +1335,7 @@ modern hardware this is a large speedup at negligible quality cost.</p>
 </div>
 <p><code>echelon3-evaluate</code> and <code>echelon3-run</code> autocast the same way (default bf16); set
 <code>precision: fp32</code> at the <strong>config root</strong> to force fp32 for those.</p>
-<h2 id="torchcompile-experimental">torch.compile (experimental)<a class="headerlink" href="#torchcompile-experimental" title="Permanent link">&para;</a></h2>
+<h2 id="torchcompile">torch.compile<a class="headerlink" href="#torchcompile" title="Permanent link">&para;</a></h2>
 <p>bf16 only speeds up <strong>compute-bound</strong> work. A small network on a big GPU is often
 <strong>launch-bound</strong> instead — dominated by per-kernel launch overhead, with the GPU
 idle between many tiny kernels — and there bf16 buys nothing. The lever is
@@ -1337,13 +1349,13 @@ idle between many tiny kernels — and there bf16 buys nothing. The lever is
 strip the resulting <code>_orig_mod.</code> prefix, so checkpoints stay interchangeable with
 uncompiled runs. The first few steps recompile (warmup) — measure steady-state,
 not iteration 1.</p>
-<div class="admonition warning">
-<p class="admonition-title">Experimental</p>
-<p>Verified single-GPU and on 4×H200 DDP (trains + checkpoints round-trip). The
-actual speedup is model-dependent — confirm on your model (watch for
-shape-driven recompiles, and closure optimizers like SAM). Whether a workload
-is launch-bound is worth checking first (<code>nvidia-smi dmon -s pu</code>: power well
-under TDP ⇒ the GPU is starved, and <code>compile</code> is the right lever).</p>
+<div class="admonition note">
+<p class="admonition-title">Model-dependent speedup</p>
+<p>Validated single-GPU and on 4×H200 DDP (including production image-in-image
+runs) — trains and round-trips checkpoints. How much you gain depends on the
+model: watch for shape-driven recompiles, and closure optimizers like SAM.
+Worth checking a workload is actually launch-bound first (<code>nvidia-smi dmon -s
+pu</code>: power well under TDP ⇒ the GPU is starved, and <code>compile</code> is the lever).</p>
 </div>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
