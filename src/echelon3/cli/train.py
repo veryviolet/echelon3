@@ -178,21 +178,26 @@ def _train(cfg: DictConfig):
     print(f'--> Training... ')
     try:
         trainer.train()
-    except Exception:
-        # Печатаем traceback ДО shutdown и в stderr (stdout не-главных ранков
-        # заглушен) — иначе причина падения ранка теряется.
+    except (Exception, KeyboardInterrupt):
+        # Ловим и KeyboardInterrupt (Ctrl-C) — иначе он шёл бы мимо этого пути.
+        # Traceback печатаем ДО shutdown в stderr (stdout не-главных ранков заглушён).
         import traceback
-        print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
+        print(f'[rank {ddp.rank()}] trainer.train() interrupted/failed:', file=sys.stderr)
         traceback.print_exc()
         if ddp.is_ddp():
             # Чистый destroy_process_group() может сам зависнуть на NCCL-teardown,
             # пока в группе висит недоделанный коллектив — тогда упавший ранг не
             # выходит, и elastic не видит падения и не снимает пиров (тихий вис).
-            # Жёсткий выход гарантирует смерть ранка → лаунчер тут же снимает пиров.
+            # Жёсткий выход гарантирует смерть ранка → лаунчер тут же снимает пиров;
+            # DataLoader-воркеры добьёт PDEATHSIG (см. ddp.set_pdeathsig).
             sys.stderr.flush()
             os._exit(1)
         raise
     finally:
+        try:
+            trainer.close()  # погасить воркеров даталоадеров на чистом выходе
+        except Exception:
+            pass
         ddp.shutdown()
 
     print(Style.RESET_ALL)

@@ -4,6 +4,24 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.2 — 2026-07-08
+
+### Fixed
+
+- **No more orphaned DataLoader / DDP processes after a crash, `kill`, or failed
+  restart.** DataLoader workers and the DDP rank processes now set
+  `PR_SET_PDEATHSIG` (Linux) via a default `worker_init_fn` / at process-group
+  init, so they are SIGKILL'd the instant their parent dies — for any reason,
+  including the `os._exit` fast-path from 0.7.1 and an external `kill -9`.
+  Previously a rank that died uncleanly left its workers running, holding
+  `/dev/shm` and host RAM; a fresh run's workers then couldn't get shared memory
+  and hung at the first batch (GPUs idle). `echelon3-train` / `-finetune` now also
+  catch `KeyboardInterrupt` (Ctrl-C goes through the teardown path) and call a new
+  `Trainer.close()` on exit to shut DataLoader workers down promptly — relevant
+  with `persistent_workers: true`. The launcher additionally warns on CPU
+  over-subscription (`ranks × num_workers > cores`) and on `persistent_workers`
+  under DDP.
+
 ## 0.7.1 — 2026-07-08
 
 ### Fixed

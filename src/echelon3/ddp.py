@@ -18,10 +18,32 @@ create_dataloaders). Чекпойнты формата DataParallel/DDP взаи
 rank 0. Так keep-best логика остаётся байт-в-байт прежней при любых метриках.
 """
 import os
+import signal
+import sys
 from datetime import timedelta
 
 import torch
 import torch.distributed as dist
+
+
+def set_pdeathsig():
+    """Linux: текущий процесс получает SIGKILL, как только умирает его родитель.
+
+    Ставим в ранге (родитель — агент лаунчера) и в DataLoader-воркерах (родитель —
+    ранг), чтобы дерево процессов не осиротевало при os._exit / SIGKILL / краше
+    предка (иначе воркеры висят, держат /dev/shm и RAM, а новый запуск зависает на
+    первом батче). Best-effort, только Linux."""
+    if sys.platform != "linux":
+        return
+    try:
+        import ctypes
+        PR_SET_PDEATHSIG = 1
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+        # Гонка: родитель мог умереть до prctl — тогда мы уже репарентнуты на init.
+        if os.getppid() == 1:
+            os._exit(1)
+    except Exception:
+        pass
 
 # Таймаут группы: бэкстоп на случай, когда ранг завис (не вышел) и elastic его не
 # снимает. Дефолт щедрый (валидация/большие шаги), но конфигурируемый — уменьшите
@@ -36,6 +58,8 @@ def ddp_env_present() -> bool:
 def init_ddp_if_needed() -> bool:
     """Инициализирует process group при запуске под torchrun. Возвращает is_ddp()."""
     if ddp_env_present() and not dist.is_initialized():
+        # Ранг умирает вместе с агентом лаунчера (не осиротевает при его SIGKILL).
+        set_pdeathsig()
         # NCCL watchdog: аборт (а не молчаливое ожидание) при ошибке/рассинхроне +
         # отчёт, какой ранг расклеился. setdefault — юзер может переопределить.
         os.environ.setdefault("TORCH_NCCL_ASYNC_ERROR_HANDLING", "1")

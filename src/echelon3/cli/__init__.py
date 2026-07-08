@@ -67,6 +67,14 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
                 print(f"--> WARNING: {_total} предзагруженных батчей на одной ноде — "
                       "риск RAM-OOM; снизьте dataloaders.train.config.num_workers / "
                       "prefetch_factor, если ран падает/виснет.")
+            _cores = os.cpu_count() or 0
+            if _cores and len(gpus) * _nw > _cores:
+                print(f"--> WARNING: {len(gpus)}×{_nw}={len(gpus) * _nw} DataLoader-воркеров "
+                      f"> {_cores} ядер — переподписка CPU; снизьте num_workers "
+                      "(ориентир: ядра / ранги на ранг).")
+            if _dl.get("persistent_workers"):
+                print("--> WARNING: persistent_workers=true держит воркеров живыми между "
+                      "эпохами — при нечистой остановке выше риск процессов-сирот.")
     except Exception:
         pass
 

@@ -77,6 +77,13 @@ per rank.
     `num_workers` / `prefetch_factor`. Set `ECHELON3_DDP_TIMEOUT_MIN` to shrink the
     process-group timeout backstop if a genuine desync should surface faster.
 
+    Workers are reaped with their process (`PR_SET_PDEATHSIG` on Linux), so a
+    crashed or `kill`ed run no longer leaves orphaned workers holding `/dev/shm`
+    and RAM — the failure mode where a *new* run then hangs at the first batch.
+    Prefer `persistent_workers: false` unless dataset init is genuinely expensive;
+    it keeps workers alive between epochs and raises the orphan risk on an unclean
+    stop. Rule of thumb: `num_workers` per rank ≈ cores ÷ ranks.
+
 ## What each rank does
 
 The network is wrapped in `DistributedDataParallel` (with

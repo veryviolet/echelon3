@@ -280,6 +280,20 @@ class Trainer:
         name = self._optimizer.__class__.__name__
         return name in ("SAMOptimizer", "LBFGS")
 
+    def close(self):
+        """Graceful shutdown: сразу гасит воркеров даталоадеров (persistent_workers
+        держат их живыми между эпохами), освобождая /dev/shm и RAM на чистом выходе,
+        не дожидаясь GC. Штатно PDEATHSIG всё равно убьёт их вместе с процессом."""
+        loaders = [self._train_loader] + list(self._test_loaders.values())
+        for loader in loaders:
+            try:
+                it = getattr(loader, "_iterator", None)
+                if it is not None:
+                    loader._iterator = None
+                    del it
+            except Exception:
+                pass
+
     def compute_losses(self, source, labels, net=None):
         """Forward pass + per-loss values — the trainer's extension seam.
 

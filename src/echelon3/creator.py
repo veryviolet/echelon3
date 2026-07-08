@@ -234,6 +234,17 @@ def create_single_dataloader(config: DictConfig, dataset):
 
 
 
+def _worker_init_fn(user_fn=None):
+    """worker_init_fn для DataLoader: воркер получает PDEATHSIG (умирает вместе с
+    рангом → не осиротеет и не держит /dev/shm/RAM), затем зовётся пользовательский
+    worker_init_fn, если был."""
+    def _init(worker_id):
+        ddp.set_pdeathsig()
+        if callable(user_fn):
+            user_fn(worker_id)
+    return _init
+
+
 def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     """
     Поддерживает:
@@ -274,6 +285,8 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
               f'{train_cfg["batch_size"]}/process x {world} processes '
               f'(num_workers={train_cfg.get("num_workers", 0)} на процесс)')
 
+    if int(train_cfg.get('num_workers', 0) or 0) > 0:
+        train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))
     train_dataloader = train_dataloader_type(dataset=train_dataset, **train_cfg)
 
     def _test_cfg(sub_cfg, dataset):
@@ -294,6 +307,8 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             # batch_size конфига — глобальный (в DP его резал на карты сам
             # DataParallel; полный батч 40 на одной карте = OOM в interpolate).
             cfg['batch_size'] = max(1, int(cfg.get('batch_size', 1)) // ddp.world_size())
+        if int(cfg.get('num_workers', 0) or 0) > 0:
+            cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'))
         return cfg
 
     # test — один или несколько
