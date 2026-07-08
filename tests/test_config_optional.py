@@ -13,6 +13,36 @@ def _c(d):
     return OmegaConf.create(d)
 
 
+# ---- config-блок опционален У ЛЮБОГО компонента (единое правило) --------
+def test_create_net_without_config():
+    net = creator.create_net(_c({"module": "torch.nn", "type": "Identity"}))
+    assert isinstance(net, torch.nn.Identity)
+
+
+def test_create_single_dataset_without_config():
+    ds = creator.create_single_dataset(
+        _c({"module": "tests._fixtures", "type": "TinyPairs"}),
+        augment=None, preprocess=None,
+    )
+    assert len(ds) == 8
+
+
+def test_create_scheduler_without_config():
+    opt = torch.optim.SGD(torch.nn.Linear(2, 2).parameters(), lr=0.1)
+    sch = creator.create_scheduler(
+        _c({"module": "torch.optim.lr_scheduler", "type": "ConstantLR"}), opt,
+    )
+    assert sch is not None
+
+
+def test_create_single_dataloader_without_config():
+    dl = creator.create_single_dataloader(
+        _c({"module": "torch.utils.data", "type": "DataLoader"}),
+        dataset=[1, 2, 3],
+    )
+    assert dl is not None
+
+
 # ---- create_metrics: секция опущена ------------------------------------
 def test_create_metrics_none_is_empty():
     assert creator.create_metrics(None) == {}

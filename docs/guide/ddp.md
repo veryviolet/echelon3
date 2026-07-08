@@ -92,10 +92,22 @@ The network is wrapped in `DistributedDataParallel` (with
 output every step). Each rank trains on its shard and DDP all-reduces gradients.
 
 **Validation is symmetric and sharded.** Every rank evaluates its own
-`DistributedSampler` shard through the unwrapped network, and the metrics
-aggregate their state across ranks inside `compute()`. The aggregated values are
-identical on every rank, so the keep-best decision matches everywhere; only
-rank 0 writes the file.
+`DistributedSampler` shard through the unwrapped network.
+
+!!! warning "Custom metrics are not aggregated across ranks"
+    **torchmetrics** metrics reduce their state across ranks inside `compute()`
+    (via `dist_reduce_fx`), so the aggregated value is identical on every rank and
+    the keep-best decision matches everywhere — correct under DDP. **Custom metrics**
+    (subclasses of `echelon3.metrics.base.Metric`) have no distributed reduction, so
+    under DDP each rank computes on its own shard only, and keep-best is driven by
+    rank 0's shard (rank 0 owns the checkpoint). The selected "best" checkpoint is
+    therefore slightly noisy, and per-shard numbers are not the global metric
+    (averaging shards is wrong for ratio metrics like IoU). For exact DDP behaviour
+    use a torchmetrics-based metric, or give your custom metric a distributed reduce
+    of its internal state (all-reduce the accumulators in `compute()`). Single-GPU
+    runs are unaffected.
+
+Only rank 0 writes the checkpoint file.
 
 ## Logs and checkpoints: rank 0 only
 

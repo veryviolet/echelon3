@@ -45,20 +45,19 @@ def get_attr_from_module(module, attr):
     return result
 
 
+def _cfg_kwargs(config) -> dict:
+    """kwargs из блока ``config``. ЕДИНОЕ правило по всему фреймворку: блок
+    ``config`` опционален у ЛЮБОГО компонента — если его нет, конструктор
+    вызывается без дополнительных аргументов (не «то опционален, то нет»)."""
+    return dict(config.config) if 'config' in config.keys() else {}
+
+
 def create_universal(config: DictConfig):
     par_type = get_attr_from_module(config.module, config.type)
+    kw = _cfg_kwargs(config)
     if inspect.isclass(par_type):
-        if 'config' in config.keys():
-            par = par_type(**config.config)
-        else:
-            par = par_type()
-    else:
-        if 'config' in config.keys():
-            par = partial(par_type, **config.config)
-        else:
-            par = par_type
-
-    return par
+        return par_type(**kw)
+    return partial(par_type, **kw) if kw else par_type
 
 
 def create_single_augment(config: DictConfig, bbox_params: DictConfig = None):
@@ -114,7 +113,7 @@ def create_preprocesses(config: DictConfig) -> Tuple[callable, callable]:
 
 def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwargs):
     ds_type = get_attr_from_module(config.module, config.type)
-    ds = ds_type(**config.config, augment=augment, preprocess=preprocess, **extra_kwargs)
+    ds = ds_type(**_cfg_kwargs(config), augment=augment, preprocess=preprocess, **extra_kwargs)
     return ds
 
 
@@ -122,7 +121,7 @@ def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader,
     ev_type = get_attr_from_module(config.module, config.type)
     # Для текущих классификаторов используем только валидационный (test) даталоудер
     ev = ev_type(
-        **config.config,
+        **_cfg_kwargs(config),
         net=net,
         dataloader=test_dataloader,
         metric=metric,
@@ -187,13 +186,13 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
 
 def create_net(config: DictConfig):
     net_type = get_attr_from_module(config.module, config.type)
-    net = net_type(**config.config)
+    net = net_type(**_cfg_kwargs(config))
     return net
 
 
 def create_backbone(config: DictConfig):
     net_type = get_attr_from_module(config.module, config.type)
-    net = net_type(**config.config)
+    net = net_type(**_cfg_kwargs(config))
     return net
 
 
@@ -203,8 +202,7 @@ def create_loss(config: DictConfig):
     for cfg in config:
         name, one = list(cfg.items())[0]
         loss_type = get_attr_from_module(one.module, one.type)
-        losses[name] = (loss_type(**one.config) if 'config' in one.keys() else loss_type(),
-                        one.get('weight', 1.0))
+        losses[name] = (loss_type(**_cfg_kwargs(one)), one.get('weight', 1.0))
 
     return losses
 
@@ -224,7 +222,7 @@ def create_metrics(config):
 
 def create_optimizer(config: DictConfig, params):
     opt_type = get_attr_from_module(config.module, config.type)
-    opt_kwargs = dict(config.config) if 'config' in config.keys() else {}
+    opt_kwargs = _cfg_kwargs(config)
     trainable_only = bool(opt_kwargs.pop('trainable_only', False))
     if trainable_only:
         params = (p for p in params if p.requires_grad)
@@ -234,13 +232,13 @@ def create_optimizer(config: DictConfig, params):
 
 def create_scheduler(config: DictConfig, optimizer: torch.optim.Optimizer):
     sch_type = get_attr_from_module(config.module, config.type)
-    sch = sch_type(optimizer=optimizer, **config.config)
+    sch = sch_type(optimizer=optimizer, **_cfg_kwargs(config))
     return sch
 
 
 def create_single_dataloader(config: DictConfig, dataset):
     dataloader_type = get_attr_from_module(config.module, config.type)
-    return dataloader_type(dataset=dataset, **config.config)
+    return dataloader_type(dataset=dataset, **_cfg_kwargs(config))
 
 
 
@@ -279,7 +277,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     """
     # train — всегда одиночный
     train_dataloader_type = get_attr_from_module(config.train.module, config.train.type)
-    train_cfg = OmegaConf.to_container(config.train.config, resolve=True)
+    train_cfg = OmegaConf.to_container(config.train.config, resolve=True) if 'config' in config.train else {}
 
     if ddp.is_ddp():
         # Семантика конфига сохраняется: batch_size — глобальный, делим на ранки.
@@ -305,7 +303,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     train_dataloader = train_dataloader_type(dataset=train_dataset, **train_cfg)
 
     def _test_cfg(sub_cfg, dataset):
-        cfg = OmegaConf.to_container(sub_cfg, resolve=True)
+        cfg = OmegaConf.to_container(sub_cfg, resolve=True) if sub_cfg is not None else {}
         if ddp.is_ddp():
             # Симметричная валидация: каждый ранк считает свой шард, метрики
             # агрегируются torchmetrics'ом (dist_reduce_fx). Воркеры через spawn:
@@ -333,12 +331,12 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         for name, ds in test_dataset.items():
             sub_cfg = config.test[name]
             test_dataloader_type = get_attr_from_module(sub_cfg.module, sub_cfg.type)
-            test_dataloaders[name] = test_dataloader_type(dataset=ds, **_test_cfg(sub_cfg.config, ds))
+            test_dataloaders[name] = test_dataloader_type(dataset=ds, **_test_cfg(sub_cfg.config if 'config' in sub_cfg else None, ds))
         return train_dataloader, test_dataloaders
     else:
         # одиночный тест‑датасет (старый формат)
         test_dataloader_type = get_attr_from_module(config.test.module, config.test.type)
-        test_dataloader = test_dataloader_type(dataset=test_dataset, **_test_cfg(config.test.config, test_dataset))
+        test_dataloader = test_dataloader_type(dataset=test_dataset, **_test_cfg(config.test.config if 'config' in config.test else None, test_dataset))
         return train_dataloader, test_dataloader
 
 def create_checkpoint_manager(config: DictConfig):
@@ -353,12 +351,12 @@ def create_trainer(config: DictConfig, net: torch.nn.Module, optimizer: torch.op
                        test_dataloader=test_dataloader, losses=losses, metrics=metrics,
                        scheduler=scheduler, ckpt_manager=ckpt_manager, mlops_logger=mlops_logger,
                        device=devices, device_ids=device_ids,
-                       **config.config)
+                       **_cfg_kwargs(config))
     return trn
 
 def create_wrapper(config: DictConfig, net):
     ev_type = get_attr_from_module(config.module, config.type)
-    ev = ev_type(**config.config, core=net)
+    ev = ev_type(**_cfg_kwargs(config), core=net)
     return ev
 
 def create_exporters(config, net):
@@ -370,7 +368,7 @@ def create_exporters(config, net):
 
     for name, cfg in config.exporters.items():
         ex_type = get_attr_from_module(cfg.module, cfg.type)
-        ex = ex_type(**cfg.config, net=net, preprocess=preprocess, postprocess=postprocess)
+        ex = ex_type(**_cfg_kwargs(cfg), net=net, preprocess=preprocess, postprocess=postprocess)
         exporters[name] = ex
 
     return exporters
@@ -379,25 +377,17 @@ def create_exporters(config, net):
 def create_constructor(config, components):
 
     net_type = get_attr_from_module(config.module, config.type)
-    net = net_type(**config.config, **components)
+    net = net_type(**_cfg_kwargs(config), **components)
 
     return net
 
 
 def create_batch_sampler(config: DictConfig, **kwargs):
     par_type = get_attr_from_module(config.module, config.type)
+    kw = _cfg_kwargs(config)
     if inspect.isclass(par_type):
-        if 'config' in config.keys():
-            par = par_type(**config.config, **kwargs)
-        else:
-            par = par_type(**kwargs)
-    else:
-        if 'config' in config.keys():
-            par = partial(par_type, **config.config, **kwargs)
-        else:
-            par = par_type
-
-    return par
+        return par_type(**kw, **kwargs)
+    return partial(par_type, **kw, **kwargs) if kw else par_type
 
 
 def create_mlops_logger(target_config: DictConfig, mlops_config: DictConfig = None):

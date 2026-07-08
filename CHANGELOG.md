@@ -4,6 +4,33 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.6 — 2026-07-08
+
+### Changed
+
+- **The per-component `config:` block is now optional everywhere, uniformly.** One
+  rule across every `create_*` (net, backbone, dataset, loss, metric, optimizer,
+  scheduler, dataloader, trainer, evaluator, wrapper, constructor, batch sampler,
+  exporter): a component whose constructor needs no arguments may omit its `config:`
+  block. Removes the previous "optional in some builders, required in others"
+  inconsistency (present-`config` behaviour is unchanged).
+
+### Fixed
+
+- **`Metric.to()` no longer strands buffers on CPU.** The base
+  `echelon3.metrics.base.Metric.to()` was a no-op that shadowed `nn.Module.to` via
+  the MRO for metrics that are *also* `nn.Module`s with buffers/parameters — their
+  buffers stayed on CPU and validation on CUDA raised a device-mismatch error. It
+  now delegates to `nn.Module.to()` when the metric is a module; pure non-module
+  metrics stay a no-op as before.
+
+### Docs
+
+- DDP guide: corrected the validation section — only torchmetrics reduce their state
+  across ranks; custom `Metric` subclasses compute per-shard, so keep-best is driven
+  by rank 0's shard (use a torchmetrics metric, or add a distributed reduce, for
+  exact behaviour).
+
 ## 0.7.5 — 2026-07-08
 
 ### Fixed
