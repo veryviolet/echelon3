@@ -731,7 +731,7 @@
   <span class="md-ellipsis">
     
   
-    Multi-GPU (DDP)
+    Multi-GPU & Precision
   
 
     
@@ -1003,6 +1003,33 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
+<h2 id="050-2026-07-08">0.5.0 — 2026-07-08<a class="headerlink" href="#050-2026-07-08" title="Permanent link">&para;</a></h2>
+<p>Multi-GPU and performance release. <strong>Breaking</strong>: DataParallel is gone and mixed
+precision defaults to bf16.</p>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Multi-GPU is built-in DDP, launched from the CLI — no <code>torchrun</code> needed.</strong>
+  Pass <code>gpus=[0,1,2,3]</code> (a root config key; default = all visible GPUs on the
+  node) and echelon3 spawns one DDP worker per GPU via PyTorch's <code>elastic_launch</code>,
+  wiring up <code>RANK</code>/<code>LOCAL_RANK</code>/<code>WORLD_SIZE</code>/<code>MASTER_*</code> itself. <code>torchrun</code> and
+  multi-node runs still work unchanged through the environment-variable path.
+  Applies to <code>echelon3-train</code> and <code>echelon3-finetune</code>.</li>
+<li><strong>Mixed precision (AMP) on by default.</strong> Training, <code>evaluate</code> and <code>run</code> autocast
+  in <strong>bf16</strong> on capable GPUs (fp32 on CPU / unsupported GPUs). Set
+  <code>trainer.config.precision: fp32</code> to restore full fp32. <code>precision: fp16</code> uses a
+  <code>GradScaler</code>; with closure optimizers (SAM/LBFGS, which double-backward) it
+  falls back to bf16. TF32 matmul and <code>cudnn.benchmark</code> are on by default
+  (<code>trainer.config.tf32</code>, <code>trainer.config.cudnn_benchmark</code>).</li>
+<li>Checkpoints save the <strong>unwrapped</strong> <code>state_dict</code> (no <code>module.</code> prefix); older
+  <code>module.</code>-prefixed checkpoints still load (prefix stripped automatically).</li>
+</ul>
+<h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>DataParallel.</strong> Multiple GPUs always run as DDP; a single process drives one
+  GPU. <code>device_ids</code> no longer selects multiple GPUs — use <code>gpus</code>. The
+  <code>run</code> / <code>evaluate</code> / <code>export</code> CLIs load checkpoints directly instead of wrapping
+  the network in <code>DataParallel</code>.</li>
+</ul>
 <h2 id="041-2026-07-07">0.4.1 — 2026-07-07<a class="headerlink" href="#041-2026-07-07" title="Permanent link">&para;</a></h2>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>

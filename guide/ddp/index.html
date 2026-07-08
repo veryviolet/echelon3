@@ -27,7 +27,7 @@
     
     
       
-        <title>Multi-GPU (DDP) - echelon3</title>
+        <title>Multi-GPU & Precision - echelon3</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#multi-gpu-training" class="md-skip">
+        <a href="#multi-gpu-training-precision" class="md-skip">
           Skip to content
         </a>
       
@@ -112,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multi-GPU (DDP)
+              Multi-GPU & Precision
             
           </span>
         </div>
@@ -747,7 +747,7 @@
   <span class="md-ellipsis">
     
   
-    Multi-GPU (DDP)
+    Multi-GPU & Precision
   
 
     
@@ -765,7 +765,7 @@
   <span class="md-ellipsis">
     
   
-    Multi-GPU (DDP)
+    Multi-GPU & Precision
   
 
     
@@ -791,10 +791,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-ddp-is-activated" class="md-nav__link">
+  <a href="#multi-gpu-in-one-command" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How DDP is activated
+        Multi-GPU in one command
       
     </span>
   </a>
@@ -802,10 +802,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#launching" class="md-nav__link">
+  <a href="#torchrun-multi-node-still-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Launching
+        torchrun / multi-node still works
       
     </span>
   </a>
@@ -846,10 +846,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-dataparallel-fallback" class="md-nav__link">
+  <a href="#mixed-precision-amp-tf32" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The DataParallel fallback
+        Mixed precision (AMP) &amp; TF32
       
     </span>
   </a>
@@ -1108,10 +1108,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-ddp-is-activated" class="md-nav__link">
+  <a href="#multi-gpu-in-one-command" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How DDP is activated
+        Multi-GPU in one command
       
     </span>
   </a>
@@ -1119,10 +1119,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#launching" class="md-nav__link">
+  <a href="#torchrun-multi-node-still-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Launching
+        torchrun / multi-node still works
       
     </span>
   </a>
@@ -1163,10 +1163,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-dataparallel-fallback" class="md-nav__link">
+  <a href="#mixed-precision-amp-tf32" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The DataParallel fallback
+        Mixed precision (AMP) &amp; TF32
       
     </span>
   </a>
@@ -1204,46 +1204,40 @@
   
 
 
-<h1 id="multi-gpu-training">Multi-GPU Training<a class="headerlink" href="#multi-gpu-training" title="Permanent link">&para;</a></h1>
-<p>echelon3 trains on multiple GPUs in two ways, and it picks between them
-<strong>automatically</strong>:</p>
-<ul>
-<li><strong>DistributedDataParallel (DDP)</strong> — one process per GPU, launched with
-  <code>torchrun</code>. This is the fast path.</li>
-<li><strong>DataParallel</strong> — a single process driving several GPUs, used as a fallback
-  when you run without <code>torchrun</code>.</li>
-</ul>
-<p>You do not toggle a config flag. The trainer detects <code>torchrun</code> and switches
-mode; the same config runs either way.</p>
-<h2 id="how-ddp-is-activated">How DDP is activated<a class="headerlink" href="#how-ddp-is-activated" title="Permanent link">&para;</a></h2>
-<p><code>echelon3.ddp.init_ddp_if_needed()</code> runs at the top of <code>echelon3-train</code>. It
-checks for the environment variables <code>torchrun</code> sets — <code>RANK</code>, <code>WORLD_SIZE</code>,
-<code>LOCAL_RANK</code> — and if they are present, initializes the process group (<code>nccl</code> on
-CUDA, <code>gloo</code> otherwise) and binds the process to <code>cuda:${LOCAL_RANK}</code>. No
-variables, no DDP.</p>
-<h2 id="launching">Launching<a class="headerlink" href="#launching" title="Permanent link">&para;</a></h2>
-<p>Use <code>torchrun</code> and point it at the installed console script:</p>
+<h1 id="multi-gpu-training-precision">Multi-GPU Training &amp; Precision<a class="headerlink" href="#multi-gpu-training-precision" title="Permanent link">&para;</a></h1>
+<p>echelon3 runs multi-GPU training with <strong>built-in DistributedDataParallel
+(DDP)</strong> — one process per GPU. You do <strong>not</strong> need <code>torchrun</code>: name the GPUs and
+echelon3 spawns the workers itself.</p>
+<h2 id="multi-gpu-in-one-command">Multi-GPU in one command<a class="headerlink" href="#multi-gpu-in-one-command" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>echelon3-train<span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment<span class="w"> </span><span class="nv">gpus</span><span class="o">=[</span><span class="m">0</span>,1,2,3<span class="o">]</span>
+</code></pre></div>
+<p><code>gpus</code> is a <strong>root config key</strong>. Set it in the config, or override it on the CLI.
+Leave it out and echelon3 uses <strong>every visible GPU on the node</strong>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">gpus</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">3</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># optional; default = all GPUs on this node</span>
+</code></pre></div>
+<p>Under the hood echelon3 calls PyTorch's own launcher (<code>elastic_launch</code>) to start
+one worker per GPU, wiring up <code>RANK</code> / <code>LOCAL_RANK</code> / <code>WORLD_SIZE</code> / <code>MASTER_*</code>
+and the process group — exactly what <code>torchrun</code> does, without you typing it. With
+a single GPU (or on CPU) nothing is spawned and training runs in-process.</p>
+<div class="admonition note">
+<p class="admonition-title">No DataParallel</p>
+<p>DataParallel has been removed (0.5.0). Multiple GPUs always run as DDP, one
+process each; a single process only ever drives one GPU. The old <code>device_ids</code>
+key no longer selects multiple GPUs — use <code>gpus</code>.</p>
+</div>
+<h2 id="torchrun-multi-node-still-works">torchrun / multi-node still works<a class="headerlink" href="#torchrun-multi-node-still-works" title="Permanent link">&para;</a></h2>
+<p>The environment-variable path is unchanged, so <code>torchrun</code> (and SLURM <code>srun</code>)
+remain available for multi-node or elastic jobs. If echelon3 finds <code>RANK</code> in the
+environment it assumes it is already a worker and does not spawn again:</p>
 <div class="highlight"><pre><span></span><code><span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">0</span>,1,2,3<span class="w"> </span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span><span class="k">$(</span>which<span class="w"> </span>echelon3-train<span class="k">)</span><span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment
 </code></pre></div>
-<ul>
-<li><code>CUDA_VISIBLE_DEVICES</code> selects which physical GPUs take part.</li>
-<li><code>--nproc_per_node</code> is the number of processes — one per visible GPU.</li>
-<li><code>$(which echelon3-train)</code> gives <code>torchrun</code> the path to the entry point;
-  everything after it is passed through to Hydra as usual.</li>
-</ul>
-<div class="admonition warning">
-<p class="admonition-title"><code>device</code> / <code>device_ids</code> are ignored under DDP</p>
-<p>With <code>torchrun</code>, each process owns exactly one GPU chosen by <code>LOCAL_RANK</code>, so
-the <code>device</code> and <code>device_ids</code> config keys do nothing — GPU selection is
-entirely <code>CUDA_VISIBLE_DEVICES</code>. The trainer prints a yellow notice if it
-sees <code>device_ids</code> in a DDP run.</p>
-</div>
+<p>For a single node, <code>gpus=[...]</code> and <code>torchrun</code> are equivalent — prefer <code>gpus</code> for
+the shorter command; reach for <code>torchrun</code> when you span nodes.</p>
 <h2 id="batch-size-is-global">Batch size is global<a class="headerlink" href="#batch-size-is-global" title="Permanent link">&para;</a></h2>
 <p><code>dataloaders.train.config.batch_size</code> is the <strong>global</strong> batch size — the total
-across all processes, exactly as it would be under DataParallel. Under DDP,
-<code>create_dataloaders</code> divides it by the world size and installs a
-<code>DistributedSampler</code>:</p>
+across all processes. Under DDP, <code>create_dataloaders</code> divides it by the world
+size and installs a <code>DistributedSampler</code>:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">dataloaders</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">train</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">torch.utils.data</span>
@@ -1256,51 +1250,60 @@ across all processes, exactly as it would be under DataParallel. Under DDP,
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">It must divide evenly</p>
-<p>If <code>batch_size</code> is not divisible by the world size, the run fails fast with a
-<code>ValueError</code>. Pick a global batch that is a multiple of <code>--nproc_per_node</code>.</p>
+<p>If <code>batch_size</code> is not divisible by the number of GPUs, the run fails fast
+with a <code>ValueError</code>. Pick a global batch that is a multiple of <code>len(gpus)</code>.</p>
 </div>
 <p>The test loader is treated the same way: its <code>batch_size</code> is global and divided
-per rank, and <code>num_workers</code> is capped at 4 per process during validation.</p>
+per rank.</p>
 <h2 id="what-each-rank-does">What each rank does<a class="headerlink" href="#what-each-rank-does" title="Permanent link">&para;</a></h2>
 <p>The network is wrapped in <code>DistributedDataParallel</code> (with
-<code>find_unused_parameters=True</code> by default; override via
+<code>find_unused_parameters=True</code> by default; set
 <code>trainer.config.ddp_find_unused_parameters: false</code> when your graph uses every
-output every step). Training runs the standard loop on each rank's shard, and
-gradients are all-reduced by DDP.</p>
+output every step). Each rank trains on its shard and DDP all-reduces gradients.</p>
 <p><strong>Validation is symmetric and sharded.</strong> Every rank evaluates its own
-<code>DistributedSampler</code> shard through the unwrapped network, and the
-torchmetrics-style metrics aggregate their state across ranks inside
-<code>compute()</code>. Because the aggregated values are identical on every rank, the
-keep-best decision is the same everywhere; only rank 0 actually writes the file.</p>
+<code>DistributedSampler</code> shard through the unwrapped network, and the metrics
+aggregate their state across ranks inside <code>compute()</code>. The aggregated values are
+identical on every rank, so the keep-best decision matches everywhere; only
+rank 0 writes the file.</p>
 <h2 id="logs-and-checkpoints-rank-0-only">Logs and checkpoints: rank 0 only<a class="headerlink" href="#logs-and-checkpoints-rank-0-only" title="Permanent link">&para;</a></h2>
-<p>To keep output and disk writes clean, non-main ranks are muted:</p>
 <ul>
 <li>Rank 0 prints, shows progress bars, and owns the mlops logger; other ranks
-  redirect stdout to <code>/dev/null</code>, disable their <code>tqdm</code> bars, and get a no-op
-  logger.</li>
-<li><code>save_checkpoint</code> returns immediately on non-main ranks — checkpoints are
-  written only by rank 0.</li>
+  redirect stdout to <code>/dev/null</code>, disable <code>tqdm</code>, and get a no-op logger.</li>
+<li><code>save_checkpoint</code> returns immediately on non-main ranks — only rank 0 writes.</li>
 </ul>
-<p>Checkpoints are format-compatible between DDP and DataParallel: both store the
-<code>state_dict</code> with a <code>module.</code> prefix, so you can resume a DDP run under
-DataParallel and vice versa. Resuming works automatically from the highest
-<code>checkpoint-N.tar</code> in <code>target.path</code>.</p>
-<h2 id="the-dataparallel-fallback">The DataParallel fallback<a class="headerlink" href="#the-dataparallel-fallback" title="Permanent link">&para;</a></h2>
-<p>Run the same config <strong>without</strong> <code>torchrun</code> and nothing distributed happens: the
-trainer wraps the network in <code>torch.nn.DataParallel(net, device_ids=...)</code> using
-the <code>device</code> / <code>device_ids</code> config keys, and <code>batch_size</code> is the whole batch that
-DataParallel scatters across the listed GPUs.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cuda</span>
-<span class="nt">device_ids</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">3</span><span class="p p-Indicator">]</span>
+<p>Checkpoints store the <strong>unwrapped</strong> <code>state_dict</code> (no <code>module.</code> prefix), so a file
+is identical whether it came from a single-GPU or a multi-GPU run and resumes
+under either. Older checkpoints that still carry a <code>module.</code> prefix load fine —
+it is stripped automatically.</p>
+<h2 id="mixed-precision-amp-tf32">Mixed precision (AMP) &amp; TF32<a class="headerlink" href="#mixed-precision-amp-tf32" title="Permanent link">&para;</a></h2>
+<p>Training uses <strong>bf16 automatic mixed precision by default</strong> on GPUs that support
+it (Hopper / Ampere and newer); on CPU or unsupported GPUs it stays fp32. On
+modern hardware this is a large speedup at negligible quality cost.</p>
+<p>Control it in <code>trainer.config</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">trainer</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">precision</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bf16</span><span class="w">        </span><span class="c1"># auto (default) | bf16 | fp16 | fp32</span>
+<span class="w">    </span><span class="nt">tf32</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">             </span><span class="c1"># TF32 matmul on Ampere+ (default true)</span>
+<span class="w">    </span><span class="nt">cudnn_benchmark</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># autotune conv algorithms for fixed input sizes (default true)</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code>echelon3-train<span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment
-</code></pre></div>
-<p>DDP is preferred for real multi-GPU jobs — DataParallel is simpler to launch but
-slower and single-process. Use it for quick two-GPU experiments; reach for
-<code>torchrun</code> when throughput matters.</p>
+<ul>
+<li><code>auto</code> / unset → bf16 when supported, else fp32.</li>
+<li><strong><code>fp32</code> → disables autocast</strong> (bit-for-bit the pre-0.5.0 behavior). This is how
+  you keep training in plain fp32.</li>
+<li><code>fp16</code> → autocast + <code>GradScaler</code>. Not supported with closure optimizers
+  (<code>SAMOptimizer</code> / <code>LBFGS</code>, which do a double backward) — those fall back to
+  bf16 automatically.</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">The default flipped to bf16 in 0.5.0</p>
+<p>Results differ from old fp32 runs (usually negligibly, and faster). Set
+<code>precision: fp32</code> to reproduce fp32 exactly.</p>
+</div>
+<p><code>echelon3-evaluate</code> and <code>echelon3-run</code> autocast the same way (default bf16); set
+<code>precision: fp32</code> at the <strong>config root</strong> to force fp32 for those.</p>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../reference/config-schema/">Config Schema</a> — the <code>dataloaders</code>, <code>device</code>,
+<li><a href="../../reference/config-schema/">Config Schema</a> — the <code>dataloaders</code>, <code>gpus</code>,
   and <code>trainer</code> sections.</li>
 <li><a href="../../getting-started/first-run/">First Run</a> — a single-GPU baseline first.
 </content></li>
