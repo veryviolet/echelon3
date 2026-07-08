@@ -1,4 +1,4 @@
-# Echelon3
+# echelon3
 
 Config-driven PyTorch training framework. Every component of a training run —
 network, dataset, augmentations, losses, metrics, optimizer, scheduler, trainer,
@@ -30,18 +30,33 @@ pip install echelon3
 echelon3-train --config-dir ./configs --config-name my_experiment
 ```
 
-Multi-GPU (DDP):
+CLIs: `echelon3-train`, `echelon3-finetune` (warm-start / freeze / head-only),
+`echelon3-evaluate`, `echelon3-run` (inference), `echelon3-export` (ONNX).
+
+## Multi-GPU — built in, no `torchrun`
+
+Name the GPUs and echelon3 spawns one DDP worker per GPU itself:
 
 ```
-CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 \
-    $(which echelon3-train) --config-dir ./configs --config-name my_experiment
+echelon3-train --config-dir ./configs --config-name my_experiment gpus=[0,1,2,3]
 ```
 
-`dataloaders.train.config.batch_size` is the global batch size; under DDP it is
-split across ranks automatically. Without `torchrun` the trainer falls back to
-`DataParallel` (`device` / `device_ids` config keys).
+`gpus` is a root config key — leave it out and echelon3 uses every visible GPU on
+the node. `dataloaders.train.config.batch_size` is the **global** batch size; it
+is split across ranks automatically. `torchrun` (and SLURM `srun`) still work
+unchanged for multi-node / elastic jobs.
+
+> DataParallel was removed in 0.5.0 — multiple GPUs always run as DDP.
+
+## Mixed precision
+
+Training, evaluation and inference use **bf16 automatic mixed precision by
+default** on capable GPUs (fp32 on CPU / unsupported GPUs) — a large speedup on
+modern hardware. Force full fp32 with `precision: fp32` under `trainer.config`
+(or `precision: fp32` at the config root for `evaluate` / `run`).
 
 ## Quick start
 
-See `examples/` for a self-contained smoke run: synthetic dataset generation and
-a minimal classifier config.
+`examples/` has self-contained smoke runs — a classifier, a CenterNet-style
+detector and semantic segmentation — each with a synthetic-data generator and a
+minimal config that trains, validates and checkpoints on CPU or GPU.

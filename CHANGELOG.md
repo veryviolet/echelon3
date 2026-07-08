@@ -4,6 +4,16 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.5.1 — 2026-07-08
+
+### Fixed
+
+- **README (the PyPI project description) rewritten for 0.5.0.** It still
+  documented the removed `DataParallel` fallback and presented `torchrun` as the
+  only multi-GPU path. Now it shows the built-in `gpus=[...]` launcher (no
+  `torchrun` needed), the bf16-by-default mixed precision, the full CLI set, and
+  all three example smokes. Docs-only release — no code changes.
+
 ## 0.5.0 — 2026-07-08
 
 Multi-GPU and performance release. **Breaking**: DataParallel is gone and mixed
