@@ -758,6 +758,17 @@ class Trainer:
 
                     train_progress.update(batch_size)
 
+                # DDP: свести распределённое состояние кастомных метрик по рангам
+                # ПЕРЕД compute() (валидация шардирована через DistributedSampler).
+                # Коллектив — зовём на ВСЕХ рангах симметрично. torchmetrics
+                # (loss_metrics и torchmetrics-метрики) сводятся сами; кастомные
+                # Metric — через свой dist_reduce (база — no-op).
+                if ddp.is_ddp():
+                    for m in metrics_for_loader.values():
+                        dr = getattr(m, "dist_reduce", None)
+                        if callable(dr):
+                            dr()
+
                 loss_metrics_values = {k: m.compute() for k, m in loss_metrics.items()}
                 metrics_values = {k: m.compute() for k, m in metrics_for_loader.items()}
 

@@ -100,12 +100,15 @@ output every step). Each rank trains on its shard and DDP all-reduces gradients.
     the keep-best decision matches everywhere — correct under DDP. **Custom metrics**
     (subclasses of `echelon3.metrics.base.Metric`) have no distributed reduction, so
     under DDP each rank computes on its own shard only, and keep-best is driven by
-    rank 0's shard (rank 0 owns the checkpoint). The selected "best" checkpoint is
-    therefore slightly noisy, and per-shard numbers are not the global metric
-    (averaging shards is wrong for ratio metrics like IoU). For exact DDP behaviour
-    use a torchmetrics-based metric, or give your custom metric a distributed reduce
-    of its internal state (all-reduce the accumulators in `compute()`). Single-GPU
-    runs are unaffected.
+    rank 0's shard (rank 0 owns the checkpoint), so the selected "best" checkpoint is
+    slightly noisy — per-shard numbers are not the global metric (averaging shards is
+    wrong for ratio metrics like IoU). For exact DDP behaviour use a torchmetrics
+    metric, or implement the **`dist_reduce()`** hook on your custom metric: the
+    trainer calls it on every rank right before `compute()`, and a counter-based
+    metric reduces its accumulators there — e.g. `all_reduce_sum_(self.tp, self.fp,
+    self.fn)` (helper in `echelon3.metrics.base`). Summing intersections/unions across
+    shards is exact. The base `dist_reduce()` is a no-op, so single-GPU runs and
+    torchmetrics are unaffected.
 
 Only rank 0 writes the checkpoint file.
 

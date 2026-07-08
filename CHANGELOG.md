@@ -4,6 +4,21 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.7 — 2026-07-08
+
+### Added
+
+- **`Metric.dist_reduce()` hook — exact custom-metric aggregation under DDP.**
+  Validation is sharded per rank; torchmetrics reduce their state inside `compute()`,
+  but custom `echelon3.metrics.base.Metric` subclasses used to compute on rank 0's
+  shard only, making keep-best selection noisy. The base `Metric` now has a
+  `dist_reduce()` method (default no-op) that the trainer calls on every rank right
+  before `compute()` under DDP. A counter-based metric (e.g. IoU's
+  intersection/union accumulators) implements it as a SUM all-reduce of its buffers —
+  helper `all_reduce_sum_(*tensors)` provided — which is exact, because summation
+  commutes with sharding (unlike averaging per-shard ratios). Single-GPU runs and
+  torchmetrics are unaffected.
+
 ## 0.7.6 — 2026-07-08
 
 ### Changed
