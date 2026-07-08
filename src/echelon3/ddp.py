@@ -23,9 +23,10 @@ from datetime import timedelta
 import torch
 import torch.distributed as dist
 
-# Дефолтные 10 минут NCCL-вотчдога малы: пока rank 0 валидируется, остальные
-# ранки ждут на barrier дольше таймаута на больших тестах.
-_PG_TIMEOUT = timedelta(minutes=60)
+# Таймаут группы: бэкстоп на случай, когда ранг завис (не вышел) и elastic его не
+# снимает. Дефолт щедрый (валидация/большие шаги), но конфигурируемый — уменьшите
+# ECHELON3_DDP_TIMEOUT_MIN, чтобы «тихий» вис при рассинхроне падал быстрее.
+_PG_TIMEOUT = timedelta(minutes=int(os.environ.get("ECHELON3_DDP_TIMEOUT_MIN", "60")))
 
 
 def ddp_env_present() -> bool:
@@ -35,6 +36,10 @@ def ddp_env_present() -> bool:
 def init_ddp_if_needed() -> bool:
     """Инициализирует process group при запуске под torchrun. Возвращает is_ddp()."""
     if ddp_env_present() and not dist.is_initialized():
+        # NCCL watchdog: аборт (а не молчаливое ожидание) при ошибке/рассинхроне +
+        # отчёт, какой ранг расклеился. setdefault — юзер может переопределить.
+        os.environ.setdefault("TORCH_NCCL_ASYNC_ERROR_HANDLING", "1")
+        os.environ.setdefault("TORCH_NCCL_DESYNC_DEBUG", "1")
         backend = "nccl" if torch.cuda.is_available() else "gloo"
         dist.init_process_group(backend=backend, timeout=_PG_TIMEOUT)
         if torch.cuda.is_available():

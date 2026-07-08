@@ -184,6 +184,13 @@ def _train(cfg: DictConfig):
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
+        if ddp.is_ddp():
+            # Чистый destroy_process_group() может сам зависнуть на NCCL-teardown,
+            # пока в группе висит недоделанный коллектив — тогда упавший ранг не
+            # выходит, и elastic не видит падения и не снимает пиров (тихий вис).
+            # Жёсткий выход гарантирует смерть ранка → лаунчер тут же снимает пиров.
+            sys.stderr.flush()
+            os._exit(1)
         raise
     finally:
         ddp.shutdown()

@@ -4,6 +4,32 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.1 — 2026-07-08
+
+### Fixed
+
+- **DDP no longer hangs silently when a rank dies (typically an OOM).** Under the
+  built-in launcher, a rank that OOM'd could wedge in `destroy_process_group()`
+  (NCCL teardown blocks on an in-flight collective) and never exit, so
+  `elastic_launch` never saw a failure and the peers blocked on the next
+  collective — a silent hang up to the process-group timeout. On the error path a
+  DDP rank now prints its traceback to stderr and hard-exits (`os._exit`) instead
+  of relying on a clean shutdown that can block, so the launcher tears the group
+  down immediately. `max_restarts=0` (fail-fast instead of silently retrying an
+  OOM into a desynced group); `ChildFailedError` is surfaced with an OOM hint;
+  `TORCH_NCCL_ASYNC_ERROR_HANDLING` / `TORCH_NCCL_DESYNC_DEBUG` are on so the NCCL
+  watchdog aborts (and reports the stuck rank) rather than waiting; the
+  process-group timeout is configurable via `ECHELON3_DDP_TIMEOUT_MIN`.
+- The launcher prints the per-node DataLoader prefetch total
+  (`ranks × num_workers × prefetch_factor`) and warns when it is large — these are
+  **per-rank** and multiply under DDP, the common cause of the OOM above.
+
+### Changed
+
+- **`torch.compile` is no longer marked experimental** — validated on single-GPU
+  and 4×H200 DDP including production image-in-image runs. The `compile` /
+  `compile_mode` knobs are unchanged.
+
 ## 0.7.0 — 2026-07-08
 
 ### Added

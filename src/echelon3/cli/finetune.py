@@ -178,6 +178,18 @@ def _finetune(cfg: DictConfig):
     print(f'--> Training... ')
     try:
         trainer.train()
+    except Exception:
+        # Traceback в stderr (stdout не-главных рангов заглушён). Под DDP —
+        # жёсткий выход: destroy_process_group() может зависнуть на NCCL-teardown,
+        # тогда упавший ранг не выходит и elastic молча ждёт (тихий вис). os._exit
+        # гарантирует смерть ранка → лаунчер снимает пиров.
+        import traceback
+        print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
+        traceback.print_exc()
+        if ddp.is_ddp():
+            sys.stderr.flush()
+            os._exit(1)
+        raise
     finally:
         ddp.shutdown()
 

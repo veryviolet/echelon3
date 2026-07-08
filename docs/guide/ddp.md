@@ -66,6 +66,17 @@ dataloaders:
 The test loader is treated the same way: its `batch_size` is global and divided
 per rank.
 
+!!! warning "`num_workers` / `prefetch_factor` are per-rank"
+    Unlike `batch_size`, the DataLoader worker count is **not** divided — every
+    rank spins up `num_workers` workers, each prefetching `prefetch_factor`
+    batches. With all ranks on one node, host RAM scales as
+    `ranks × num_workers × prefetch_factor × batch`, so a value sized for a single
+    GPU multiplies under DDP. If it exceeds RAM the OOM-killer strikes a worker or
+    a rank; the launcher now fails fast with a hint (and prints the batch-prefetch
+    total at startup) instead of hanging silently — but the fix is to lower
+    `num_workers` / `prefetch_factor`. Set `ECHELON3_DDP_TIMEOUT_MIN` to shrink the
+    process-group timeout backstop if a genuine desync should surface faster.
+
 ## What each rank does
 
 The network is wrapped in `DistributedDataParallel` (with
@@ -120,7 +131,7 @@ trainer:
 `echelon3-evaluate` and `echelon3-run` autocast the same way (default bf16); set
 `precision: fp32` at the **config root** to force fp32 for those.
 
-## torch.compile (experimental)
+## torch.compile
 
 bf16 only speeds up **compute-bound** work. A small network on a big GPU is often
 **launch-bound** instead — dominated by per-kernel launch overhead, with the GPU
@@ -139,12 +150,12 @@ strip the resulting `_orig_mod.` prefix, so checkpoints stay interchangeable wit
 uncompiled runs. The first few steps recompile (warmup) — measure steady-state,
 not iteration 1.
 
-!!! warning "Experimental"
-    Verified single-GPU and on 4×H200 DDP (trains + checkpoints round-trip). The
-    actual speedup is model-dependent — confirm on your model (watch for
-    shape-driven recompiles, and closure optimizers like SAM). Whether a workload
-    is launch-bound is worth checking first (`nvidia-smi dmon -s pu`: power well
-    under TDP ⇒ the GPU is starved, and `compile` is the right lever).
+!!! note "Model-dependent speedup"
+    Validated single-GPU and on 4×H200 DDP (including production image-in-image
+    runs) — trains and round-trips checkpoints. How much you gain depends on the
+    model: watch for shape-driven recompiles, and closure optimizers like SAM.
+    Worth checking a workload is actually launch-bound first (`nvidia-smi dmon -s
+    pu`: power well under TDP ⇒ the GPU is starved, and `compile` is the lever).
 
 ## Next
 

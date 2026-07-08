@@ -51,6 +51,25 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     from torch.distributed.launcher.api import LaunchConfig, elastic_launch
 
     print(f"--> DDP: launching {len(gpus)} worker(s) on GPUs {gpus} (no torchrun needed)")
+
+    # OOM-footgun: num_workers/prefetch_factor — ПЕР-РАНК, а лаунчер сажает все
+    # ранги на одну ноду, поэтому RAM ноды ~ ранги × num_workers × prefetch ×
+    # батч. Раздутое произведение — частая причина RAM-OOM (и «тихого» виса).
+    try:
+        _dl = cfg.dataloaders.train.config
+        _nw = int(_dl.get("num_workers", 0) or 0)
+        if _nw > 0:
+            _pf = int(_dl.get("prefetch_factor", 2) or 2)
+            _total = len(gpus) * _nw * _pf
+            print(f"--> DDP dataloader RAM: {len(gpus)} ranks × {_nw} workers × "
+                  f"{_pf} prefetch = {_total} batches prefetched on this node")
+            if _total > 64:
+                print(f"--> WARNING: {_total} предзагруженных батчей на одной ноде — "
+                      "риск RAM-OOM; снизьте dataloaders.train.config.num_workers / "
+                      "prefetch_factor, если ран падает/виснет.")
+    except Exception:
+        pass
+
     launch_cfg = LaunchConfig(
         min_nodes=1,
         max_nodes=1,
@@ -59,8 +78,20 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
         rdzv_endpoint="localhost:0",
         run_id="echelon3",
         start_method="spawn",
+        # Fail-fast: не перезапускать сдохший от OOM ранг в уже расклеенную группу
+        # (дефолт 3 → тихий ретрай + зависшее ре-рандеву).
+        max_restarts=0,
     )
     # Резолвим интерполяции в родителе, чтобы все воркеры получили идентичный cfg.
     resolved = OmegaConf.create(OmegaConf.to_container(cfg, resolve=True))
-    elastic_launch(launch_cfg, train_fn)(resolved)
+    from torch.distributed.elastic.multiprocessing.errors import ChildFailedError
+    try:
+        elastic_launch(launch_cfg, train_fn)(resolved)
+    except ChildFailedError:
+        # Воркер умер (частая причина — RAM/CUDA-OOM от num_workers × prefetch ×
+        # ранги). Сообщаем явно, а не выходим молча по чужому traceback.
+        print("--> DDP: воркер упал (traceback ранга выше). Частая причина под DDP — "
+              "OOM от dataloaders.*.config.num_workers / prefetch_factor.",
+              file=sys.stderr)
+        raise
     return True
