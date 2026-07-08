@@ -4,6 +4,20 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.5.2 — 2026-07-08
+
+### Fixed
+
+- **`GrayscaleCLAHE` is now picklable**, so it survives DataLoader workers
+  started with the `spawn` start method (and spawn-only platforms). It stored a
+  bare `cv2.CLAHE` C++ handle, which cannot be pickled — any run whose data
+  workers pickle the dataset died with `TypeError: cannot pickle 'cv2.CLAHE'
+  object`. The handle is now dropped on pickle and rebuilt from the stored
+  `clip` / `grid` params on unpickle. Under the default `fork` start method the
+  transform is inherited and never pickled, so single-GPU runs and the example
+  smokes never triggered it — reproduced and fixed under a `spawn` DataLoader on
+  4×H200.
+
 ## 0.5.1 — 2026-07-08
 
 ### Fixed

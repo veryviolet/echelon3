@@ -230,11 +230,30 @@ class GrayscaleCLAHE(torch.nn.Module):
 
     def __init__(self, clahe: bool = True, clip: float = 2.0, grid: int = 8, **kwargs):
         super(GrayscaleCLAHE, self).__init__()
+        self._use_clahe = bool(clahe)
+        self._clip = float(clip)
+        self._grid = int(grid)
         self._clahe = (
-            cv2.createCLAHE(clipLimit=float(clip), tileGridSize=(int(grid), int(grid)))
-            if clahe
+            cv2.createCLAHE(clipLimit=self._clip, tileGridSize=(self._grid, self._grid))
+            if self._use_clahe
             else None
         )
+
+    # cv2.CLAHE is a C++ handle that cannot be pickled — a bare instance breaks
+    # any pickling boundary (DataLoader workers under `spawn`, spawn-only
+    # platforms). Keep the parameters, drop the handle on pickle, rebuild it on
+    # unpickle so the transform round-trips.
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        state["_clahe"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if getattr(self, "_use_clahe", False) and getattr(self, "_clahe", None) is None:
+            self._clahe = cv2.createCLAHE(
+                clipLimit=self._clip, tileGridSize=(self._grid, self._grid)
+            )
 
     @torch.no_grad()
     def forward(self, x):
