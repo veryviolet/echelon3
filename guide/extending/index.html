@@ -796,6 +796,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-trainers-the-compute_losses-seam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom trainers: the compute_losses seam
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#public-zoo-repositories" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1119,6 +1130,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-trainers-the-compute_losses-seam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom trainers: the compute_losses seam
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#public-zoo-repositories" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1260,6 +1282,35 @@ can mix your code with the built-ins: a custom head on a <code>timm</code> backb
 inside <code>echelon3.nets.classifier.ClassifierNet</code>, or your backbone inside
 <code>echelon3.nets.segmenter.Segmenter</code>.</p>
 </div>
+<h2 id="custom-trainers-the-compute_losses-seam">Custom trainers: the <code>compute_losses</code> seam<a class="headerlink" href="#custom-trainers-the-compute_losses-seam" title="Permanent link">&para;</a></h2>
+<p>A <code>Trainer</code> subclass rarely needs to touch the training loop. Everything that is
+easy to get wrong — DDP, the autocast/precision path, the grad scaler, closure
+optimizers, sharded validation, checkpointing — lives in the base and stays
+there. To customize how inputs reach the network or how losses map to its
+outputs, override a single method:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_losses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Runs INSIDE the trainer&#39;s autocast; return (predictions, {name: (loss, weight)}).&quot;&quot;&quot;</span>
+    <span class="n">net</span> <span class="o">=</span> <span class="n">net</span> <span class="k">if</span> <span class="n">net</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_net</span>
+    <span class="o">...</span>
+    <span class="k">return</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">losses_values</span>
+</code></pre></div>
+<p>Both training and validation call it, so you never re-implement the precision
+path. <code>echelon3.trainers.pair.PairTrainer</code> is exactly this: it consumes
+<code>((base, query), gt)</code> batches, calls <code>net(base, query, return_features)</code> and
+delegates loss routing to a second hook, <code>pair_losses(heatmap, features, labels)</code>
+(default: every loss on the heatmap). A domain-specific image-in-image trainer is
+then a natural subclass that overrides only <code>pair_losses</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MyImageInImageTrainer</span><span class="p">(</span><span class="n">PairTrainer</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">pair_losses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">heatmap</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">labels</span><span class="p">):</span>
+        <span class="n">presence</span> <span class="o">=</span> <span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">values</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="p">(</span><span class="n">loss</span><span class="p">,</span> <span class="n">weight</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_losses</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="s2">&quot;presence&quot;</span> <span class="ow">in</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">and</span> <span class="n">features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">out</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">loss</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">presence</span><span class="p">),</span> <span class="n">weight</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">out</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">loss</span><span class="p">(</span><span class="n">heatmap</span><span class="p">,</span> <span class="n">labels</span><span class="o">.</span><span class="n">float</span><span class="p">()),</span> <span class="n">weight</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span>   <span class="c1"># no autocast / scaler / closure code — the base owns it</span>
+</code></pre></div>
 <h2 id="public-zoo-repositories">Public zoo repositories<a class="headerlink" href="#public-zoo-repositories" title="Permanent link">&para;</a></h2>
 <p>Whole architecture collections live in separate repos you clone next to your
 configs and reference by import path — the same <code>module:</code> mechanism, just a
