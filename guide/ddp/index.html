@@ -857,6 +857,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#torchcompile-experimental" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        torch.compile (experimental)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1174,6 +1185,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#torchcompile-experimental" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        torch.compile (experimental)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1301,6 +1323,28 @@ modern hardware this is a large speedup at negligible quality cost.</p>
 </div>
 <p><code>echelon3-evaluate</code> and <code>echelon3-run</code> autocast the same way (default bf16); set
 <code>precision: fp32</code> at the <strong>config root</strong> to force fp32 for those.</p>
+<h2 id="torchcompile-experimental">torch.compile (experimental)<a class="headerlink" href="#torchcompile-experimental" title="Permanent link">&para;</a></h2>
+<p>bf16 only speeds up <strong>compute-bound</strong> work. A small network on a big GPU is often
+<strong>launch-bound</strong> instead — dominated by per-kernel launch overhead, with the GPU
+idle between many tiny kernels — and there bf16 buys nothing. The lever is
+<code>torch.compile</code>, which fuses kernels and cuts the launch count:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">trainer</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">compile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">             </span><span class="c1"># off by default</span>
+<span class="w">    </span><span class="nt">compile_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">        </span><span class="c1"># null | &quot;reduce-overhead&quot; | &quot;max-autotune&quot;</span>
+</code></pre></div>
+<p>The network is compiled before the DDP wrapper; <code>ddp.unwrap()</code> and checkpoints
+strip the resulting <code>_orig_mod.</code> prefix, so checkpoints stay interchangeable with
+uncompiled runs. The first few steps recompile (warmup) — measure steady-state,
+not iteration 1.</p>
+<div class="admonition warning">
+<p class="admonition-title">Experimental</p>
+<p>Verified single-GPU and on 4×H200 DDP (trains + checkpoints round-trip). The
+actual speedup is model-dependent — confirm on your model (watch for
+shape-driven recompiles, and closure optimizers like SAM). Whether a workload
+is launch-bound is worth checking first (<code>nvidia-smi dmon -s pu</code>: power well
+under TDP ⇒ the GPU is starved, and <code>compile</code> is the right lever).</p>
+</div>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../reference/config-schema/">Config Schema</a> — the <code>dataloaders</code>, <code>gpus</code>,
