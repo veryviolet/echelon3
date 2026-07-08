@@ -1288,6 +1288,12 @@ a rank; the launcher now fails fast with a hint (and prints the batch-prefetch
 total at startup) instead of hanging silently — but the fix is to lower
 <code>num_workers</code> / <code>prefetch_factor</code>. Set <code>ECHELON3_DDP_TIMEOUT_MIN</code> to shrink the
 process-group timeout backstop if a genuine desync should surface faster.</p>
+<p>Workers are reaped with their process (<code>PR_SET_PDEATHSIG</code> on Linux), so a
+crashed or <code>kill</code>ed run no longer leaves orphaned workers holding <code>/dev/shm</code>
+and RAM — the failure mode where a <em>new</em> run then hangs at the first batch.
+Prefer <code>persistent_workers: false</code> unless dataset init is genuinely expensive;
+it keeps workers alive between epochs and raises the orphan risk on an unclean
+stop. Rule of thumb: <code>num_workers</code> per rank ≈ cores ÷ ranks.</p>
 </div>
 <h2 id="what-each-rank-does">What each rank does<a class="headerlink" href="#what-each-rank-does" title="Permanent link">&para;</a></h2>
 <p>The network is wrapped in <code>DistributedDataParallel</code> (with
