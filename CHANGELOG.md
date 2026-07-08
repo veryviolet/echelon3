@@ -4,6 +4,18 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.5 — 2026-07-08
+
+### Fixed
+
+- **Regression from 0.7.2: `DataLoader(multiprocessing_context="spawn")` crashed
+  while pickling `worker_init_fn`.** The default PDEATHSIG `worker_init_fn` (added
+  in 0.7.2 for worker reaping) was a closure, and spawn must pickle
+  `worker_init_fn` to hand it to the fresh worker process — closures are not
+  picklable. Only the fork path (the default) had been tested, so this shipped
+  unnoticed. It is now a module-level function wrapped in `functools.partial`,
+  which pickles cleanly; `spawn` works again with worker reaping intact.
+
 ## 0.7.4 — 2026-07-08
 
 ### Changed

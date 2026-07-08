@@ -244,15 +244,20 @@ def create_single_dataloader(config: DictConfig, dataset):
 
 
 
+def _pdeathsig_worker_init(worker_id, _user_fn=None):
+    """В воркере: PDEATHSIG (умирает вместе с рангом → не осиротеет и не держит
+    /dev/shm/RAM), затем пользовательский worker_init_fn, если был.
+
+    ВАЖНО: это модульная функция, а НЕ замыкание — иначе DataLoader с
+    ``multiprocessing_context='spawn'`` не смог бы её запиклить (регрессия 0.7.2)."""
+    ddp.set_pdeathsig()
+    if callable(_user_fn):
+        _user_fn(worker_id)
+
+
 def _worker_init_fn(user_fn=None):
-    """worker_init_fn для DataLoader: воркер получает PDEATHSIG (умирает вместе с
-    рангом → не осиротеет и не держит /dev/shm/RAM), затем зовётся пользовательский
-    worker_init_fn, если был."""
-    def _init(worker_id):
-        ddp.set_pdeathsig()
-        if callable(user_fn):
-            user_fn(worker_id)
-    return _init
+    # partial модульной функции — picklable (для spawn), в отличие от замыкания.
+    return partial(_pdeathsig_worker_init, _user_fn=user_fn)
 
 
 def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
