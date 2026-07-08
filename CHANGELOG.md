@@ -4,6 +4,18 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.4 — 2026-07-08
+
+### Changed
+
+- Revert the per-component `config:`-block optionality added in 0.7.3: `net`,
+  datasets, and schedulers require their `config:` block again (as before 0.7.3).
+  Making `config` optional only in some builders was inconsistent; making it
+  optional everywhere would spread that leniency, and requiring it literally
+  everywhere is impossible (no-arg leaf transforms such as `To01` legitimately omit
+  `config`). Section-level omission (`transform` / `metrics` / `scheduler` /
+  `keep_best_on`) is unchanged.
+
 ## 0.7.3 — 2026-07-08
 
 ### Changed

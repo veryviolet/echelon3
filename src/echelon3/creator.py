@@ -114,8 +114,7 @@ def create_preprocesses(config: DictConfig) -> Tuple[callable, callable]:
 
 def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwargs):
     ds_type = get_attr_from_module(config.module, config.type)
-    base = dict(config.config) if 'config' in config.keys() else {}
-    ds = ds_type(**base, augment=augment, preprocess=preprocess, **extra_kwargs)
+    ds = ds_type(**config.config, augment=augment, preprocess=preprocess, **extra_kwargs)
     return ds
 
 
@@ -188,7 +187,7 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
 
 def create_net(config: DictConfig):
     net_type = get_attr_from_module(config.module, config.type)
-    net = net_type(**config.config) if 'config' in config.keys() else net_type()
+    net = net_type(**config.config)
     return net
 
 
@@ -235,8 +234,7 @@ def create_optimizer(config: DictConfig, params):
 
 def create_scheduler(config: DictConfig, optimizer: torch.optim.Optimizer):
     sch_type = get_attr_from_module(config.module, config.type)
-    sch = sch_type(optimizer=optimizer, **config.config) if 'config' in config.keys() \
-        else sch_type(optimizer=optimizer)
+    sch = sch_type(optimizer=optimizer, **config.config)
     return sch
 
 

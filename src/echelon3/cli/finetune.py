@@ -160,7 +160,7 @@ def _finetune(cfg: DictConfig):
 
     optimizer = create_optimizer(cfg.optimizer, params)
     print(Fore.LIGHTGREEN_EX, end="")
-    print(f'        {type(optimizer).__name__}({cfg.optimizer.get("config", {})})')
+    print(f'        {type(optimizer).__name__}({cfg.optimizer.config})')
     print(Fore.CYAN, end="")
 
     scheduler = create_scheduler(cfg.scheduler, optimizer) if 'scheduler' in cfg.keys() else None

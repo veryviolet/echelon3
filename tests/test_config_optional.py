@@ -13,21 +13,6 @@ def _c(d):
     return OmegaConf.create(d)
 
 
-# ---- create_net: config опционален -------------------------------------
-def test_create_net_without_config():
-    net = creator.create_net(_c({"module": "torch.nn", "type": "Identity"}))
-    assert isinstance(net, torch.nn.Identity)
-
-
-# ---- create_single_dataset: config опционален --------------------------
-def test_create_single_dataset_without_config():
-    ds = creator.create_single_dataset(
-        _c({"module": "tests._fixtures", "type": "TinyPairs"}),
-        augment=None, preprocess=None,
-    )
-    assert len(ds) == 8
-
-
 # ---- create_metrics: секция опущена ------------------------------------
 def test_create_metrics_none_is_empty():
     assert creator.create_metrics(None) == {}
@@ -47,15 +32,6 @@ def test_create_preprocesses_none():
 def test_create_preprocesses_purpose_without_preprocess_key():
     train_pp, test_pp = creator.create_preprocesses(_c({"train": {}, "test": {}}))
     assert train_pp is None and test_pp is None
-
-
-# ---- create_scheduler: config опционален -------------------------------
-def test_create_scheduler_without_config():
-    opt = torch.optim.SGD(torch.nn.Linear(2, 2).parameters(), lr=0.1)
-    sch = creator.create_scheduler(
-        _c({"module": "torch.optim.lr_scheduler", "type": "ConstantLR"}), opt,
-    )
-    assert sch is not None
 
 
 # ---- create_loss: weight по умолчанию 1.0, config опционален -----------

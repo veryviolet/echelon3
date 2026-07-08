@@ -116,7 +116,7 @@ def _train(cfg: DictConfig):
     net = create_net(cfg.net)
     net.to(device)
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(net).__name__}({cfg.net.get("config", {})})')
+    print(f'        {type(net).__name__}({cfg.net.config})')
     print(Fore.CYAN, end='')
 
     if 'weights' in cfg.net.keys():
@@ -143,14 +143,14 @@ def _train(cfg: DictConfig):
     print(f'--> Initializing optimizer... ')
     optimizer = create_optimizer(cfg.optimizer, net.parameters())
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(optimizer).__name__}({cfg.optimizer.get("config", {})})')
+    print(f'        {type(optimizer).__name__}({cfg.optimizer.config})')
     print(Fore.CYAN, end='')
 
     print(f'--> Initializing learning rate scheduler... ')
     if 'scheduler' in cfg.keys():
         scheduler = create_scheduler(cfg.scheduler, optimizer)
         print(Fore.LIGHTGREEN_EX, end='')
-        print(f'        {type(scheduler).__name__}({cfg.scheduler.get("config", {})})')
+        print(f'        {type(scheduler).__name__}({cfg.scheduler.config})')
         print(Fore.CYAN, end='')
     else:
         scheduler = None
