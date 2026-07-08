@@ -4,6 +4,24 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.6.0 — 2026-07-08
+
+### Added
+
+- **`Trainer.compute_losses(source, labels, net=None)` — an extension seam for
+  the forward pass and loss routing.** It runs inside the trainer's autocast and
+  returns `(predictions, {name: (loss, weight)})`; both training and validation
+  call it, so a subclass customizes *what the network is fed and how losses map
+  to its outputs* without ever re-implementing the precision / scaler / closure /
+  DDP machinery, which stays in the base. Behaviour is unchanged — the default
+  `compute_losses` is the previous single-input forward.
+- **`echelon3.trainers.pair.PairTrainer`** — a trainer for two-image
+  ("pair" / image-in-image) inputs. Consumes `((base, query), gt)` batches
+  (via `pair_collate_fn`), calls `net(base, query, return_features)` and delegates
+  loss routing to `pair_losses(heatmap, features, labels)` (default: every loss on
+  the heatmap). A domain-specific image-in-image trainer becomes a natural
+  subclass overriding only `pair_losses` — see `guide/extending.md`.
+
 ## 0.5.2 — 2026-07-08
 
 ### Fixed

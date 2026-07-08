@@ -120,6 +120,42 @@ register with echelon3; they are just named by import path.
     inside `echelon3.nets.classifier.ClassifierNet`, or your backbone inside
     `echelon3.nets.segmenter.Segmenter`.
 
+## Custom trainers: the `compute_losses` seam
+
+A `Trainer` subclass rarely needs to touch the training loop. Everything that is
+easy to get wrong — DDP, the autocast/precision path, the grad scaler, closure
+optimizers, sharded validation, checkpointing — lives in the base and stays
+there. To customize how inputs reach the network or how losses map to its
+outputs, override a single method:
+
+```python
+def compute_losses(self, source, labels, net=None):
+    """Runs INSIDE the trainer's autocast; return (predictions, {name: (loss, weight)})."""
+    net = net if net is not None else self._net
+    ...
+    return predictions, losses_values
+```
+
+Both training and validation call it, so you never re-implement the precision
+path. `echelon3.trainers.pair.PairTrainer` is exactly this: it consumes
+`((base, query), gt)` batches, calls `net(base, query, return_features)` and
+delegates loss routing to a second hook, `pair_losses(heatmap, features, labels)`
+(default: every loss on the heatmap). A domain-specific image-in-image trainer is
+then a natural subclass that overrides only `pair_losses`:
+
+```python
+class MyImageInImageTrainer(PairTrainer):
+    def pair_losses(self, heatmap, features, labels):
+        presence = (labels.flatten(1).max(1).values > 0.5).float()
+        out = {}
+        for name, (loss, weight) in self._losses.items():
+            if "presence" in name.lower() and features is not None:
+                out[name] = (loss(features, presence), weight)
+            else:
+                out[name] = (loss(heatmap, labels.float()), weight)
+        return out   # no autocast / scaler / closure code — the base owns it
+```
+
 ## Public zoo repositories
 
 Whole architecture collections live in separate repos you clone next to your

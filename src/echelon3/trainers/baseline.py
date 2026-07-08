@@ -267,24 +267,39 @@ class Trainer:
         name = self._optimizer.__class__.__name__
         return name in ("SAMOptimizer", "LBFGS")
 
+    def compute_losses(self, source, labels, net=None):
+        """Forward pass + per-loss values — the trainer's extension seam.
+
+        Override this to customize how inputs are fed to the network or how losses
+        map to its outputs (paired inputs, multi-output heads, name-routed losses,
+        …). It runs INSIDE the trainer's autocast context; the base keeps ownership
+        of scaler / backward / closure / optimizer-step and logging, so subclasses
+        never re-implement the precision path. Returns
+        ``(predictions, {name: (loss_tensor, weight)})``. ``net`` lets validation
+        pass its (unwrapped) eval network; it defaults to the training network.
+        """
+        net = net if net is not None else self._net
+        predictions = net(source)
+
+        if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
+                and len(predictions.shape) > len(labels.shape):
+            while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
+                predictions = predictions.squeeze(-1)
+
+        losses_values = {
+            name: (
+                loss[0](predictions, labels.float() if self._float_labels else labels),
+                loss[1],
+            )
+            for name, loss in self._losses.items()
+        }
+        return predictions, losses_values
+
     def one_step_train(self, source, labels):
         def closure(**kwargs):
             self._optimizer.zero_grad(set_to_none=True)
             with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
-                predictions = self._net(source)
-
-                if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
-                        and len(predictions.shape) > len(labels.shape):
-                    while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
-                        predictions = predictions.squeeze(-1)
-
-                losses_values = {
-                    name: (
-                        loss[0](predictions, labels.float() if self._float_labels else labels),
-                        loss[1],
-                    )
-                    for name, loss in self._losses.items()
-                }
+                predictions, losses_values = self.compute_losses(source, labels)
                 total_loss = torch.sum(
                     torch.stack([ls[0] * ls[1] for ls in losses_values.values()])
                 )
@@ -564,20 +579,7 @@ class Trainer:
     def one_step_validate(self, source, labels):
         net = self._eval_net if self._eval_net is not None else self._net
         with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
-            predictions = net(source)
-
-            if isinstance(predictions, torch.Tensor) and isinstance(labels, torch.Tensor) \
-                    and len(predictions.shape) > len(labels.shape):
-                while predictions.dim() > labels.dim() and predictions.size(-1) == 1:
-                    predictions = predictions.squeeze(-1)
-
-            losses_values = {
-                name: (
-                    loss[0](predictions, labels.float() if self._float_labels else labels),
-                    loss[1],
-                )
-                for name, loss in self._losses.items()
-            }
+            predictions, losses_values = self.compute_losses(source, labels, net=net)
         # Метрики считаем на fp32: после autocast выходы могут быть bf16/fp16.
         predictions = runtime.to_float32(predictions)
         self._logger.log_test_data(self._global_step, source, labels, predictions)
