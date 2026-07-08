@@ -1003,8 +1003,32 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
-<h2 id="072-2026-07-08">0.7.2 — 2026-07-08<a class="headerlink" href="#072-2026-07-08" title="Permanent link">&para;</a></h2>
+<h2 id="073-2026-07-08">0.7.3 — 2026-07-08<a class="headerlink" href="#073-2026-07-08" title="Permanent link">&para;</a></h2>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>CLI output is now uniformly English and single-colour.</strong> A handful of runtime
+  messages (and raised errors) were Russian and/or highlighted in yellow, which
+  looked out of place in the public package; they now read in English in the
+  ambient colour like the rest of the <code>--&gt;</code> log.</li>
+<li><strong>Warnings no longer corrupt progress bars.</strong> Library warnings are collected
+  instead of printed inline; a short summary (<code>--&gt; N warning(s) since last report</code>
+  with per-message counts) is emitted before each validation and once at the end.
+  Deprecation/Future noise is dropped outright. The c10d <code>barrier(): using the
+  device under current context</code> warning is silenced at the source by passing
+  <code>device_id</code> to <code>init_process_group</code>.</li>
+</ul>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Config parameters with sensible defaults are now optional — omitting them no
+  longer crashes.</strong> <code>transform</code> (augment/preprocess), <code>metrics</code>, and <code>scheduler</code>
+  may be omitted entirely (→ ToTensorV2-only, no metrics, constant LR);
+  <code>keep_best_on</code> is optional (→ save every validation); and the per-object
+  <code>config:</code> block is optional for <code>net</code>, datasets, losses, and schedulers
+  (constructed with no extra args). Loss <code>weight</code> defaults to <code>1.0</code>. A new pytest
+  suite (<code>tests/</code>, <code>pip install -e .[test]</code>) covers these paths.</li>
+</ul>
+<h2 id="072-2026-07-08">0.7.2 — 2026-07-08<a class="headerlink" href="#072-2026-07-08" title="Permanent link">&para;</a></h2>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>No more orphaned DataLoader / DDP processes after a crash, <code>kill</code>, or failed
   restart.</strong> DataLoader workers and the DDP rank processes now set
@@ -1021,7 +1045,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   under DDP.</li>
 </ul>
 <h2 id="071-2026-07-08">0.7.1 — 2026-07-08<a class="headerlink" href="#071-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>DDP no longer hangs silently when a rank dies (typically an OOM).</strong> Under the
   built-in launcher, a rank that OOM'd could wedge in <code>destroy_process_group()</code>
@@ -1039,7 +1063,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   (<code>ranks × num_workers × prefetch_factor</code>) and warns when it is large — these are
   <strong>per-rank</strong> and multiply under DDP, the common cause of the OOM above.</li>
 </ul>
-<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>torch.compile</code> is no longer marked experimental</strong> — validated on single-GPU
   and 4×H200 DDP including production image-in-image runs. The <code>compile</code> /
@@ -1058,7 +1082,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   round-trip). The actual speedup and any shape-driven recompiles are
   model-dependent (see <code>guide/ddp.md</code>).</li>
 </ul>
-<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>PairTrainer</code> calls the network positionally</strong> — <code>net(base, query, True)</code>
   instead of <code>net(base, query, return_features=True)</code>. Pair nets name the third
@@ -1083,7 +1107,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   subclass overriding only <code>pair_losses</code> — see <code>guide/extending.md</code>.</li>
 </ul>
 <h2 id="052-2026-07-08">0.5.2 — 2026-07-08<a class="headerlink" href="#052-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>GrayscaleCLAHE</code> is now picklable</strong>, so it survives DataLoader workers
   started with the <code>spawn</code> start method (and spawn-only platforms). It stored a
@@ -1096,7 +1120,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   4×H200.</li>
 </ul>
 <h2 id="051-2026-07-08">0.5.1 — 2026-07-08<a class="headerlink" href="#051-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>README (the PyPI project description) rewritten for 0.5.0.</strong> It still
   documented the removed <code>DataParallel</code> fallback and presented <code>torchrun</code> as the
@@ -1107,7 +1131,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
 <h2 id="050-2026-07-08">0.5.0 — 2026-07-08<a class="headerlink" href="#050-2026-07-08" title="Permanent link">&para;</a></h2>
 <p>Multi-GPU and performance release. <strong>Breaking</strong>: DataParallel is gone and mixed
 precision defaults to bf16.</p>
-<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Multi-GPU is built-in DDP, launched from the CLI — no <code>torchrun</code> needed.</strong>
   Pass <code>gpus=[0,1,2,3]</code> (a root config key; default = all visible GPUs on the
@@ -1132,7 +1156,7 @@ precision defaults to bf16.</p>
   the network in <code>DataParallel</code>.</li>
 </ul>
 <h2 id="041-2026-07-07">0.4.1 — 2026-07-07<a class="headerlink" href="#041-2026-07-07" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>IoU.compute</code> (segmentation metric) returned <code>nan</code> whenever <code>ignore_index</code> was
   unset (the default): <code>use_idx[None] = False</code> added an axis and wiped the whole
@@ -1147,7 +1171,7 @@ precision defaults to bf16.</p>
 <li>cross-entropy + <code>IoU</code> config) mirroring <code>examples/detector/</code>.</li>
 </ul>
 <h2 id="040-2026-07-07">0.4.0 — 2026-07-07<a class="headerlink" href="#040-2026-07-07" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Detection pipeline now trains end to end (CenterNet-style <code>HeatmapDetector</code>,
   YOLO-format <code>DetectionDataset</code>). Several defects along the path were fixed:</li>
@@ -1205,7 +1229,7 @@ precision defaults to bf16.</p>
   repositories can reference their local packages from configs
   (<code>module: my_zoo.nets.foo</code>) when running from the repo root.</li>
 </ul>
-<h3 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_7">Fixed<a class="headerlink" href="#fixed_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>create_exporters</code> instantiated <code>torch.nn.Identity</code> incorrectly when no
   preprocess/postprocess is configured.</li>
