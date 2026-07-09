@@ -4,6 +4,20 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.8 — 2026-07-09
+
+### Fixed
+
+- **`MultiHeadBinaryIoU` now aggregates across ranks under DDP**, fixing noisy
+  best-checkpoint selection for every project that uses it (validation is sharded
+  per rank, and the metric previously computed on rank 0's shard only — inflating
+  the tracked value). It implements the `dist_reduce()` hook (from 0.7.7): a SUM
+  all-reduce of each head's raw `tp/fp/fn/n` counters before `compute()`. This is
+  exact because the counters are additive over samples; `n` is reduced too, so the
+  set of seen heads — and thus the macro-mean denominator — is consistent across
+  ranks. No-op outside DDP; the counters are non-persistent buffers, so checkpoints
+  are unchanged.
+
 ## 0.7.7 — 2026-07-08
 
 ### Added

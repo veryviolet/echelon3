@@ -17,7 +17,7 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 
-from echelon3.metrics.base import Metric
+from echelon3.metrics.base import Metric, all_reduce_sum_
 
 
 class MultiHeadBinaryIoU(Metric, nn.Module):
@@ -71,6 +71,20 @@ class MultiHeadBinaryIoU(Metric, nn.Module):
             getattr(self, f"fp_{h}").add_(fp.float())
             getattr(self, f"fn_{h}").add_(fn.float())
             getattr(self, f"n_{h}").add_(1.0)
+
+    def dist_reduce(self):
+        # DDP: свести сырые счётчики по рангам ПЕРЕД compute(). Валидация
+        # шардируется DistributedSampler'ом, base Metric.dist_reduce — no-op,
+        # поэтому compute() иначе видит только шард rank0. Пересечения/объединения
+        # аддитивны → SUM-all-reduce счётчиков даёт ТОЧНЫЙ глобальный IoU (усреднять
+        # по-шардовые IoU нельзя). n_{h} тоже редуцируем, иначе набор «увиденных»
+        # голов разойдётся по рангам и macro-mean пойдёт по разному знаменателю.
+        # all_reduce_sum_ — no-op вне distributed, так что одиночный GPU не задет.
+        for h in self.head_names:
+            all_reduce_sum_(
+                getattr(self, f"tp_{h}"), getattr(self, f"fp_{h}"),
+                getattr(self, f"fn_{h}"), getattr(self, f"n_{h}"),
+            )
 
     def compute_per_head(self) -> Dict[str, float]:
         out: Dict[str, float] = {}

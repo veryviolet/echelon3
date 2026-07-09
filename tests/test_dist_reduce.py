@@ -53,3 +53,16 @@ def test_custom_metric_dist_reduce_runs_and_computes():
     m.update(p, t)
     m.dist_reduce()          # вне DDP — буферы не меняются
     assert abs(m.compute() - (1.0 / 2.0)) < 1e-6
+
+
+def test_multihead_binary_iou_dist_reduce_single_process():
+    from echelon3.metrics.multibinary import MultiHeadBinaryIoU
+
+    m = MultiHeadBinaryIoU(head_names=["road"])
+    preds = {"road": torch.tensor([[[[2.0, -2.0], [2.0, 2.0]]]])}  # (1,1,2,2) logits
+    labels = {"road": torch.tensor([[[1, 0], [1, 0]]])}            # (1,2,2)
+    m.update(preds, labels)
+    iou_before = m.compute()
+    m.dist_reduce()  # вне DDP — no-op, счётчики не меняются
+    assert m.compute() == iou_before
+    assert abs(iou_before - 2.0 / 3.0) < 1e-6  # tp=2, fp=1, fn=0
