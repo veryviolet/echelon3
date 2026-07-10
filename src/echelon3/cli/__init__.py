@@ -32,6 +32,23 @@ def resolve_gpus(cfg):
     return list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
 
 
+def resolve_single_device(cfg, cuda_available: bool):
+    """Устройство для НЕ-DDP запуска.
+
+    Приоритет: ``cfg.device=cpu`` (или CUDA недоступна) → CPU; иначе, если задан
+    ``gpus``, садимся на КОНКРЕТНУЮ карту ``gpus[0]`` (раньше одиночный режим
+    игнорировал индекс и всегда брал cuda:0 — тихая коллизия на шаренной ноде и
+    нарушение резерва GPU 0); иначе — ``cfg.device``. DDP-путь индекс уже уважает
+    (CUDA_VISIBLE_DEVICES для воркеров). Возврат — ``torch.device``."""
+    import torch
+    dev = str(cfg.device) if 'device' in cfg.keys() else 'cuda'
+    if dev.startswith('cpu') or not cuda_available:
+        return torch.device('cpu')
+    if 'gpus' in cfg and cfg.gpus is not None and len(cfg.gpus) >= 1:
+        return torch.device(f'cuda:{int(cfg.gpus[0])}')
+    return torch.device(dev)
+
+
 def maybe_launch_ddp(cfg, train_fn) -> bool:
     """Встроенный однонодовый DDP-лаунчер (замена torchrun).
 

@@ -31,7 +31,7 @@ import sys
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device
 from echelon3 import warncollect
 from echelon3.creator import (
     create_datasets, create_augments, create_preprocesses, create_dataloaders,
@@ -92,8 +92,9 @@ def _finetune(cfg: DictConfig):
         if not ddp.is_main():
             sys.stdout = open(os.devnull, 'w')
     else:
-        device = torch.device(cfg.device if 'device' in cfg.keys() else 'cuda') \
-            if torch.cuda.is_available() else torch.device('cpu')
+        device = resolve_single_device(cfg, torch.cuda.is_available())
+        if device.type == 'cuda':
+            torch.cuda.set_device(device)  # .cuda()/autocast-дефолты — на нужную карту
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
     print(Fore.CYAN)

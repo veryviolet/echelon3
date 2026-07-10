@@ -4,6 +4,20 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.9 — 2026-07-10
+
+### Fixed
+
+- **Single-GPU runs now honour the `gpus` index instead of always landing on GPU 0.**
+  Non-DDP device selection read `cfg.device` (`cuda` → `cuda:0`) and ignored `gpus`,
+  so `echelon3-train … gpus=[1]` silently ran on physical GPU 0 — colliding with
+  other jobs and breaking "don't touch GPU 0" reservations on shared hosts (DDP
+  already honoured the index). The CLI now pins the process to `cuda:{gpus[0]}` (plus
+  `torch.cuda.set_device`) via a `resolve_single_device` helper; `device: cpu`
+  overrides still win and configs without `gpus` are unchanged. Done via an explicit
+  device index rather than `CUDA_VISIBLE_DEVICES`, which is a no-op in-process once
+  the CUDA runtime has initialised (`torch.cuda.is_available()` alone locks it).
+
 ## 0.7.8 — 2026-07-09
 
 ### Fixed
