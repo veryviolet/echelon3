@@ -4,6 +4,20 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.1 — 2026-07-12
+
+### Fixed
+
+- **`ZeroDivisionError` on small datasets** when `times_to_validate_per_epoch` exceeds
+  the number of batches in an epoch (e.g. 2 batches with `=5`). The validation trigger
+  computed `... % (total_batches // times_to_validate_per_epoch)`, which is `% 0` when
+  `total_batches < times_to_validate_per_epoch`. Now
+  `max(1, total_batches // times_to_validate_per_epoch)`. Hit GPU and CPU alike, on any
+  tiny dataset.
+- **`device: cpu` now forces CPU even on a multi-GPU host.** With no `gpus` set the DDP
+  launcher used every visible GPU and ignored `device: cpu`; it now returns early when
+  `device` is `cpu`, so a CPU run stays on CPU.
+
 ## 0.8.0 — 2026-07-11
 
 ### Changed

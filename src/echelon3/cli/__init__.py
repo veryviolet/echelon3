@@ -93,6 +93,9 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     """
     if "RANK" in os.environ:  # уже воркер (наш спавн или внешний torchrun)
         return False
+    # device=cpu форсит CPU: не поднимаем DDP даже на многокарточной ноде.
+    if "device" in cfg and str(cfg.device).startswith("cpu"):
+        return False
 
     import torch
     gpus = resolve_gpus(cfg)

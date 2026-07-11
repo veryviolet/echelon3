@@ -410,7 +410,7 @@ class Trainer:
             if (
                 (batch + 1 - (total_batches % self._times_to_validate_per_epoch)) != 0
                 and (batch + 1 - (total_batches % self._times_to_validate_per_epoch))
-                % (total_batches // self._times_to_validate_per_epoch)
+                % max(1, total_batches // self._times_to_validate_per_epoch)
                 == 0
             ):
 
