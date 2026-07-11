@@ -1003,6 +1003,19 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
+<h2 id="081-2026-07-12">0.8.1 — 2026-07-12<a class="headerlink" href="#081-2026-07-12" title="Permanent link">&para;</a></h2>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>ZeroDivisionError</code> on small datasets</strong> when <code>times_to_validate_per_epoch</code> exceeds
+  the number of batches in an epoch (e.g. 2 batches with <code>=5</code>). The validation trigger
+  computed <code>... % (total_batches // times_to_validate_per_epoch)</code>, which is <code>% 0</code> when
+  <code>total_batches &lt; times_to_validate_per_epoch</code>. Now
+  <code>max(1, total_batches // times_to_validate_per_epoch)</code>. Hit GPU and CPU alike, on any
+  tiny dataset.</li>
+<li><strong><code>device: cpu</code> now forces CPU even on a multi-GPU host.</strong> With no <code>gpus</code> set the DDP
+  launcher used every visible GPU and ignored <code>device: cpu</code>; it now returns early when
+  <code>device</code> is <code>cpu</code>, so a CPU run stays on CPU.</li>
+</ul>
 <h2 id="080-2026-07-11">0.8.0 — 2026-07-11<a class="headerlink" href="#080-2026-07-11" title="Permanent link">&para;</a></h2>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1018,7 +1031,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   struct-mode prefixes) and a heavy dependency (<code>hydra-core</code> → <code>click</code>).</li>
 </ul>
 <h2 id="0712-2026-07-11">0.7.12 — 2026-07-11<a class="headerlink" href="#0712-2026-07-11" title="Permanent link">&para;</a></h2>
-<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Single-GPU <code>device=cuda</code> runs crashed</strong> (regression since 0.7.9). Non-DDP device
   selection returns <code>torch.device('cuda')</code> (no index) when no <code>gpus=</code> is given, and
@@ -1033,7 +1046,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   ignore SIGINT; the main process handles the interrupt and reaps them via PDEATHSIG.</li>
 </ul>
 <h2 id="0711-2026-07-10">0.7.11 — 2026-07-10<a class="headerlink" href="#0711-2026-07-10" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_1">Fixed<a class="headerlink" href="#fixed_1" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Ctrl-C now stops cleanly instead of dumping a traceback.</strong> <code>KeyboardInterrupt</code>
   is handled separately from real errors — a one-line "Interrupted by user (Ctrl-C)"
@@ -1058,7 +1071,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   style; workers no longer reprint the banner.</li>
 </ul>
 <h2 id="079-2026-07-10">0.7.9 — 2026-07-10<a class="headerlink" href="#079-2026-07-10" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_2">Fixed<a class="headerlink" href="#fixed_2" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Single-GPU runs now honour the <code>gpus</code> index instead of always landing on GPU 0.</strong>
   Non-DDP device selection read <code>cfg.device</code> (<code>cuda</code> → <code>cuda:0</code>) and ignored <code>gpus</code>,
@@ -1071,7 +1084,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   the CUDA runtime has initialised (<code>torch.cuda.is_available()</code> alone locks it).</li>
 </ul>
 <h2 id="078-2026-07-09">0.7.8 — 2026-07-09<a class="headerlink" href="#078-2026-07-09" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_3">Fixed<a class="headerlink" href="#fixed_3" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>MultiHeadBinaryIoU</code> now aggregates across ranks under DDP</strong>, fixing noisy
   best-checkpoint selection for every project that uses it (validation is sharded
@@ -1107,7 +1120,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   block. Removes the previous "optional in some builders, required in others"
   inconsistency (present-<code>config</code> behaviour is unchanged).</li>
 </ul>
-<h3 id="fixed_4">Fixed<a class="headerlink" href="#fixed_4" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Metric.to()</code> no longer strands buffers on CPU.</strong> The base
   <code>echelon3.metrics.base.Metric.to()</code> was a no-op that shadowed <code>nn.Module.to</code> via
@@ -1124,7 +1137,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   exact behaviour).</li>
 </ul>
 <h2 id="075-2026-07-08">0.7.5 — 2026-07-08<a class="headerlink" href="#075-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_5">Fixed<a class="headerlink" href="#fixed_5" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Regression from 0.7.2: <code>DataLoader(multiprocessing_context="spawn")</code> crashed
   while pickling <code>worker_init_fn</code>.</strong> The default PDEATHSIG <code>worker_init_fn</code> (added
@@ -1159,7 +1172,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   device under current context</code> warning is silenced at the source by passing
   <code>device_id</code> to <code>init_process_group</code>.</li>
 </ul>
-<h3 id="fixed_6">Fixed<a class="headerlink" href="#fixed_6" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_7">Fixed<a class="headerlink" href="#fixed_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Config parameters with sensible defaults are now optional — omitting them no
   longer crashes.</strong> <code>transform</code> (augment/preprocess), <code>metrics</code>, and <code>scheduler</code>
@@ -1170,7 +1183,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   suite (<code>tests/</code>, <code>pip install -e .[test]</code>) covers these paths.</li>
 </ul>
 <h2 id="072-2026-07-08">0.7.2 — 2026-07-08<a class="headerlink" href="#072-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_7">Fixed<a class="headerlink" href="#fixed_7" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_8">Fixed<a class="headerlink" href="#fixed_8" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>No more orphaned DataLoader / DDP processes after a crash, <code>kill</code>, or failed
   restart.</strong> DataLoader workers and the DDP rank processes now set
@@ -1187,7 +1200,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   under DDP.</li>
 </ul>
 <h2 id="071-2026-07-08">0.7.1 — 2026-07-08<a class="headerlink" href="#071-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_8">Fixed<a class="headerlink" href="#fixed_8" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_9">Fixed<a class="headerlink" href="#fixed_9" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>DDP no longer hangs silently when a rank dies (typically an OOM).</strong> Under the
   built-in launcher, a rank that OOM'd could wedge in <code>destroy_process_group()</code>
@@ -1249,7 +1262,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   subclass overriding only <code>pair_losses</code> — see <code>guide/extending.md</code>.</li>
 </ul>
 <h2 id="052-2026-07-08">0.5.2 — 2026-07-08<a class="headerlink" href="#052-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_9">Fixed<a class="headerlink" href="#fixed_9" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_10">Fixed<a class="headerlink" href="#fixed_10" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>GrayscaleCLAHE</code> is now picklable</strong>, so it survives DataLoader workers
   started with the <code>spawn</code> start method (and spawn-only platforms). It stored a
@@ -1262,7 +1275,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   4×H200.</li>
 </ul>
 <h2 id="051-2026-07-08">0.5.1 — 2026-07-08<a class="headerlink" href="#051-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_10">Fixed<a class="headerlink" href="#fixed_10" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_11">Fixed<a class="headerlink" href="#fixed_11" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>README (the PyPI project description) rewritten for 0.5.0.</strong> It still
   documented the removed <code>DataParallel</code> fallback and presented <code>torchrun</code> as the
@@ -1298,7 +1311,7 @@ precision defaults to bf16.</p>
   the network in <code>DataParallel</code>.</li>
 </ul>
 <h2 id="041-2026-07-07">0.4.1 — 2026-07-07<a class="headerlink" href="#041-2026-07-07" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_11">Fixed<a class="headerlink" href="#fixed_11" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_12">Fixed<a class="headerlink" href="#fixed_12" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>IoU.compute</code> (segmentation metric) returned <code>nan</code> whenever <code>ignore_index</code> was
   unset (the default): <code>use_idx[None] = False</code> added an axis and wiped the whole
@@ -1313,7 +1326,7 @@ precision defaults to bf16.</p>
 <li>cross-entropy + <code>IoU</code> config) mirroring <code>examples/detector/</code>.</li>
 </ul>
 <h2 id="040-2026-07-07">0.4.0 — 2026-07-07<a class="headerlink" href="#040-2026-07-07" title="Permanent link">&para;</a></h2>
-<h3 id="fixed_12">Fixed<a class="headerlink" href="#fixed_12" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_13">Fixed<a class="headerlink" href="#fixed_13" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Detection pipeline now trains end to end (CenterNet-style <code>HeatmapDetector</code>,
   YOLO-format <code>DetectionDataset</code>). Several defects along the path were fixed:</li>
@@ -1371,7 +1384,7 @@ precision defaults to bf16.</p>
   repositories can reference their local packages from configs
   (<code>module: my_zoo.nets.foo</code>) when running from the repo root.</li>
 </ul>
-<h3 id="fixed_13">Fixed<a class="headerlink" href="#fixed_13" title="Permanent link">&para;</a></h3>
+<h3 id="fixed_14">Fixed<a class="headerlink" href="#fixed_14" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>create_exporters</code> instantiated <code>torch.nn.Identity</code> incorrectly when no
   preprocess/postprocess is configured.</li>
