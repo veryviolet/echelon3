@@ -1,13 +1,13 @@
 [project]
 name = "echelon3"
-version = "0.8.1"
+version = "0.8.2"
 description = "Config-driven PyTorch training framework: assemble nets, data, losses and trainers from YAML"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Kirill Groshenkov", email = "kir.groshenkov@gmail.com" }]
-keywords = ["pytorch", "training", "deep-learning", "computer-vision", "hydra", "config-driven"]
+keywords = ["pytorch", "training", "deep-learning", "computer-vision", "config-driven"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -51,6 +51,7 @@ Homepage = "https://github.com/veryviolet/echelon3"
 Repository = "https://github.com/veryviolet/echelon3"
 Issues = "https://github.com/veryviolet/echelon3/issues"
 Documentation = "https://veryviolet.github.io/echelon3/"
+Changelog = "https://github.com/veryviolet/echelon3/blob/master/CHANGELOG.md"
 
 [project.scripts]
 # Единый исполняемый: echelon3 train|finetune|run|evaluate|export ...
@@ -68,3 +69,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/echelon3"]
+# Ship CHANGELOG inside the installed package (site-packages/echelon3/CHANGELOG.md).
+force-include = { "CHANGELOG.md" = "echelon3/CHANGELOG.md" }
+
+[tool.hatch.build.targets.sdist]
+include = ["src/echelon3", "CHANGELOG.md", "README.md", "LICENSE", "pyproject.toml"]

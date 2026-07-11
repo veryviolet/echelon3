@@ -4,6 +4,16 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.2 — 2026-07-12
+
+### Packaging
+
+- **`CHANGELOG.md` now ships inside the package** — `echelon3/CHANGELOG.md` in the wheel
+  (so it lands in `site-packages`) and in the sdist — and a **`Changelog`** project URL
+  is exposed in the metadata (shown by `pip show echelon3` and on PyPI). Previously the
+  changelog lived only in the repo, so tools inspecting the installed package couldn't
+  find it.
+
 ## 0.8.1 — 2026-07-12
 
 ### Fixed
