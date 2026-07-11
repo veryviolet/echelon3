@@ -20,6 +20,11 @@ from echelon3.creator import create_metrics, create_mlops_logger, create_univers
 
 @hydra.main(version_base=None, config_path=None)
 def trainer_app(cfg: DictConfig):
+    # Баннер + Fore.CYAN печатаем в РОДИТЕЛЕ до DDP-лаунча: тогда он идёт ПЕРЕД
+    # сообщениями лаунчера, а те наследуют cyan (colorama держит цвет в процессе) —
+    # иначе они шли до баннера и без цвета. Спавн-воркеры баннер не повторяют.
+    print(Fore.CYAN)
+    print(f'\n\n{__title__} {__version__}: trainer.\n\n')
     # Встроенный DDP: если запрошено >1 GPU и мы не воркер — порождаем по процессу
     # на GPU (замена torchrun) и выходим; иначе обучаемся в этом процессе.
     if maybe_launch_ddp(cfg, _train):
@@ -50,9 +55,7 @@ def _train(cfg: DictConfig):
             torch.cuda.set_device(device)  # .cuda()/autocast-дефолты — на нужную карту
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
-    print(Fore.CYAN)
-
-    print(f'\n\n{__title__} {__version__}: trainer.\n\n')
+    print(Fore.CYAN)  # воркер: свой цвет (баннер уже напечатан родителем)
 
     if use_ddp:
         print(f'--> DDP: world_size={ddp.world_size()}, backend={torch.distributed.get_backend()}, '

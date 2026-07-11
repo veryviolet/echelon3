@@ -73,6 +73,10 @@ def _load_init_weights(net: torch.nn.Module, ckpt_path: str, strict: bool = Fals
 
 @hydra.main(version_base=None, config_path=None)
 def finetune_app(cfg: DictConfig):
+    # Баннер + Fore.CYAN — в РОДИТЕЛЕ до DDP-лаунча (см. trainer_app): баннер первым,
+    # сообщения лаунчера наследуют cyan. Спавн-воркеры баннер не повторяют.
+    print(Fore.CYAN)
+    print(f'\n\n{__title__} {__version__}: finetune trainer.\n\n')
     # Встроенный DDP: несколько GPU — порождаем воркеры (замена torchrun) и выходим.
     if maybe_launch_ddp(cfg, _finetune):
         return
@@ -97,8 +101,7 @@ def _finetune(cfg: DictConfig):
             torch.cuda.set_device(device)  # .cuda()/autocast-дефолты — на нужную карту
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
-    print(Fore.CYAN)
-    print(f'\n\n{__title__} {__version__}: finetune trainer.\n\n')
+    print(Fore.CYAN)  # воркер: свой цвет (баннер уже напечатан родителем)
 
     _transform = cfg.transform if 'transform' in cfg.keys() else None
     train_augment, test_augment = create_augments(_transform)

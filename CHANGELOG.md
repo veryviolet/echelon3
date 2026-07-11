@@ -4,6 +4,18 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.10 — 2026-07-10
+
+### Changed
+
+- **DDP launcher messages now print after the banner and in the same colour.** The
+  `--> DDP: launching …` / dataloader-RAM / warning lines are emitted by the parent
+  before workers start; they used to appear *before* the product banner and
+  uncoloured, because the banner and `Fore.CYAN` were set only in the worker. The
+  banner and colour are now set in the parent (`trainer_app` / `finetune_app`) before
+  the DDP launch, so the banner comes first and the launcher lines inherit the cyan
+  style; workers no longer reprint the banner.
+
 ## 0.7.9 — 2026-07-10
 
 ### Fixed
