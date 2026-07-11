@@ -59,9 +59,9 @@ jobs:
           .venv-test/bin/pip install --quiet torch torchvision \
             --index-url https://download.pytorch.org/whl/cpu
           .venv-test/bin/pip install --quiet dist/*.whl
-          .venv-test/bin/echelon3-train --help > /dev/null
-          .venv-test/bin/echelon3-evaluate --help > /dev/null
-          .venv-test/bin/echelon3-run --help > /dev/null
+          .venv-test/bin/echelon3 train --help > /dev/null
+          .venv-test/bin/echelon3 evaluate --help > /dev/null
+          .venv-test/bin/echelon3 run --help > /dev/null
 
       - name: publish to PyPI via OIDC
         uses: pypa/gh-action-pypi-publish@release/v1

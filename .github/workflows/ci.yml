@@ -56,16 +56,16 @@ jobs:
 
       - name: smoke — CLI entry points respond
         run: |
-          .venv-test/bin/echelon3-train --help > /dev/null
-          .venv-test/bin/echelon3-evaluate --help > /dev/null
-          .venv-test/bin/echelon3-run --help > /dev/null
+          .venv-test/bin/echelon3 train --help > /dev/null
+          .venv-test/bin/echelon3 evaluate --help > /dev/null
+          .venv-test/bin/echelon3 run --help > /dev/null
 
       - name: smoke — train a classifier on synthetic data (CPU)
         run: |
           .venv-test/bin/python examples/gen_smoke_data.py --root /tmp/smoke_data
           # tqdm пишет прогресс (включая accuracy) в stderr — сливаем оба потока
           SMOKE_DATA_ROOT=/tmp/smoke_data SMOKE_TARGET=/tmp/smoke_target \
-            .venv-test/bin/echelon3-train --config-dir examples/configs --config-name smoke \
+            .venv-test/bin/echelon3 train --config-dir examples/configs --config-name smoke \
             2>&1 | tee /tmp/smoke.log
           test -f /tmp/smoke_target/checkpoint-1.tar
           # финальная accuracy на разделимой синтетике должна быть высокой
@@ -83,7 +83,7 @@ jobs:
         run: |
           .venv-test/bin/pip install --quiet onnx onnxruntime
           SMOKE_TARGET=/tmp/smoke_target \
-            .venv-test/bin/echelon3-export --config-dir examples/configs --config-name smoke
+            .venv-test/bin/echelon3 export --config-dir examples/configs --config-name smoke
           test -f /tmp/smoke_target/smoke.onnx
           .venv-test/bin/python - <<'PY'
           import onnxruntime as ort, numpy as np, cv2, glob

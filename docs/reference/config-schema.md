@@ -17,7 +17,7 @@ what goes in it, which keys are required, and which `create_*` function in
 
 | Section | Read by | Purpose |
 | --- | --- | --- |
-| `device` / `device_ids` | `cli.train` | Target device and `DataParallel` GPU ids |
+| `device` / `gpus` | `cli.train` | Target device (`cuda`/`cpu`) and GPU selection (multi → DDP) |
 | `net` | `create_net` | The network (nested triples for backbone/head/neck) |
 | `weights_loader` | `create_universal` | How to load `net.weights` (optional) |
 | `data` | `create_datasets` | Train dataset + one or many test datasets |
@@ -35,15 +35,17 @@ what goes in it, which keys are required, and which `create_*` function in
 | `evaluator` | `create_evaluator` | Post-training evaluation (optional) |
 | `init_from` / `finetune` | `cli.finetune` | Warm-start, freezing, param groups (optional) |
 
-## `device` / `device_ids`
+## `device` / `gpus`
 
-Plain scalars, not triples. `device` defaults to `cuda` (falls back to `cpu`
-when CUDA is unavailable). `device_ids` is a list of GPU indices passed to
-`torch.nn.DataParallel`.
+Plain scalars/lists, not triples. `device` defaults to `cuda` (falls back to `cpu`
+when CUDA is unavailable); `device: cpu` forces CPU. `gpus` is a list of GPU indices:
+more than one spawns DDP (one process per GPU), a single index pins the run to that
+physical GPU, and omitting it uses every visible GPU. (`device_ids` is legacy and
+ignored — DataParallel was removed in 0.5.0.)
 
 ```yaml
 device: cuda
-device_ids: [0, 1]
+gpus: [0, 1]
 ```
 
 !!! warning "Ignored under DDP"
@@ -439,7 +441,6 @@ section, runnable end to end (see [First Run](../getting-started/first-run.md)):
 
 ```yaml
 device: cuda
-device_ids: [0]
 
 net:
   module: echelon3.nets.classifier
@@ -543,5 +544,3 @@ export:
 
 - [Built-in Components](components.md) — the catalog of `module`/`type` values.
 - [Extending](../guide/extending.md) — plug in your own classes.
-</content>
-</invoke>

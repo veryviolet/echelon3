@@ -4,6 +4,19 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.3 — 2026-07-12
+
+### Docs
+
+- **Rewrote the README** (the PyPI front page) — clear value prop, a complete copy-and-run
+  config + command, a "what you get" list, and the CLI/overrides — and swept the docs,
+  examples and CI onto the 0.8.0 interface: `echelon3 <cmd>` everywhere (not the
+  `echelon3-<cmd>` aliases), OmegaConf overrides and `defaults:` composition, built-in
+  DDP via `gpus=[...]`. Fixed stale DataParallel/`torchrun` wording, dropped the legacy
+  `device_ids` from the example configs, removed committed editing artifacts from doc
+  pages, added the `detection` extra to the install docs, and corrected the `ddp.py`
+  module docstring. Verified by a documentation-review pass and `mkdocs build --strict`.
+
 ## 0.8.2 — 2026-07-12
 
 ### Packaging

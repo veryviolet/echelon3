@@ -192,4 +192,3 @@ is simply more importable code.
 - [Config Schema](../reference/config-schema.md) — every section explained.
 - [Built-in Components](../reference/components.md) — what ships in the box.
 - [How It Works](../concepts/how-it-works.md) — the resolution model in depth.
-</content>

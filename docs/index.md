@@ -21,7 +21,8 @@ class and point a config at it; you never edit the framework.
 
 - A single factory (`echelon3.creator`) that turns a YAML tree into a live training
   run by resolving each `module` / `type` / `config` triple.
-- A `Trainer` with multi-GPU support (DDP via `torchrun`, or `DataParallel`),
+- A `Trainer` with built-in multi-GPU (DDP — one process per GPU via `gpus=[...]`,
+  no `torchrun` needed),
   multi-metric keep-best checkpointing, and multiple named validation sets.
 - Batteries-included generic components: folder/CSV classification datasets,
   segmentation and detection datasets, balanced/classwise/multipart dataloaders,

@@ -3,19 +3,13 @@
 # width/height loss -> decode peaks -> mAP). Runs on CPU or a single GPU.
 #
 #   python gen_det_data.py --root ./det_data
-#   DET_DATA=./det_data echelon3-train --config-dir . --config-name detector_smoke
+#   DET_DATA=./det_data echelon3 train --config-dir . --config-name detector_smoke
 #
 # Run it from this directory: the CLI puts the cwd on sys.path so `module:
 # backbone` resolves to backbone.py next to this file.
-hydra:
-  job:
-    chdir: False
 
-defaults:
-  - _self_
 
 device: cuda           # override with device=cpu for a CPU-only run
-device_ids: [0]
 
 net:
   module: echelon3.nets.detector

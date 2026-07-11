@@ -184,4 +184,3 @@ not iteration 1.
 - [Config Schema](../reference/config-schema.md) — the `dataloaders`, `gpus`,
   and `trainer` sections.
 - [First Run](../getting-started/first-run.md) — a single-GPU baseline first.
-</content>

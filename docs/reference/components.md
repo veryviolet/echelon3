@@ -13,6 +13,7 @@ the notable arguments — see the source for the full signature.
     A few components need extra dependencies:
     `pip install echelon3[sam]` (SAM optimizer, MosaicML),
     `echelon3[smp]` (Lovász loss and the PSP neck, segmentation-models-pytorch),
+    `echelon3[detection]` (mAP COCO backend, faster-coco-eval),
     `echelon3[export]` (ONNX export). Install with the bracketed extra to use them.
 
 ## Datasets — `module: echelon3.data.*`
@@ -142,7 +143,7 @@ Torchmetrics-style objects (`update`/`compute`/`reset`).
 | `echelon3.metrics.classification` | `FrrAtFar` | False reject rate at a given false accept rate (`at_far`). |
 | `echelon3.metrics.segmentation` | `IoU` | Mean intersection-over-union (via an internal confusion matrix). |
 | `echelon3.metrics.segmentation` | `ConfusionMatrix` | Multi-class confusion matrix. |
-| `echelon3.metrics.detection` | `mAP` | Mean average precision (wraps torchmetrics `MeanAveragePrecision`). |
+| `echelon3.metrics.detection` | `mAP` | Mean average precision (wraps torchmetrics `MeanAveragePrecision`); needs `echelon3[detection]`. |
 | `echelon3.metrics.multibinary` | `MultiHeadBinaryIoU` | Per-head binary IoU + macro mean. |
 | `echelon3.metrics.base` | `Metric` | Base class for custom metrics. |
 
@@ -193,7 +194,7 @@ Central Difference Convolution family used in anti-spoofing backbones: `CDC`,
 
 | `module` | `type` | Purpose |
 | --- | --- | --- |
-| `echelon3.trainers.baseline` | `Trainer` | The default loop: train/validate/keep-best/checkpoint, DDP- and DataParallel-aware. |
+| `echelon3.trainers.baseline` | `Trainer` | The default loop: train/validate/keep-best/checkpoint, DDP-aware. |
 | `echelon3.trainers.multihead` | `MultiHeadTrainer` | `Trainer` subclass that handles dict-shaped predictions and labels. |
 
 ## Optimizers — `module: echelon3.optimizers.sam`
@@ -263,4 +264,3 @@ For `echelon3 evaluate`.
 
 - [Config Schema](config-schema.md) — how these fit into each section.
 - [Extending](../guide/extending.md) — add your own classes the same way.
-</content>

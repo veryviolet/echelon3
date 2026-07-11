@@ -7,8 +7,9 @@ pip install echelon3
 ```
 
 This pulls in the core dependencies (torch, torchvision, timm, torchmetrics,
-albumentations, click, opencv-python, tensorboard, and friends) and installs
-five console scripts on your `PATH`:
+albumentations, click, opencv-python, tensorboard, and friends) and installs the
+`echelon3` command with five subcommands (the per-command `echelon3-train`, … scripts
+are kept as legacy aliases):
 
 | Command | Purpose |
 | --- | --- |
@@ -23,9 +24,10 @@ five console scripts on your `PATH`:
 Some functionality lives behind extras so the base install stays lean:
 
 ```bash
-pip install "echelon3[export]"   # ONNX export (onnx, onnxruntime)
-pip install "echelon3[sam]"      # SAMOptimizer (mosaicml)
-pip install "echelon3[smp]"      # segmentation-models-pytorch losses/necks
+pip install "echelon3[export]"     # ONNX export (onnx, onnxruntime)
+pip install "echelon3[detection]"  # mAP COCO eval backend (faster-coco-eval)
+pip install "echelon3[sam]"        # SAMOptimizer (mosaicml)
+pip install "echelon3[smp]"        # segmentation-models-pytorch losses/necks
 ```
 
 The corresponding modules import lazily: importing `echelon3` never fails because

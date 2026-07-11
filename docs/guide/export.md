@@ -64,8 +64,8 @@ echelon3 export --config-dir configs --config-name my_experiment
 ```
 
 The exporter builds the network from `net`, and — if a `target` section is
-present — loads the latest checkpoint from `target.path` (falling back to a
-`DataParallel`-style load for `module.`-prefixed keys). It then runs every
+present — loads the latest checkpoint from `target.path` (a legacy `module.` prefix from
+DDP checkpoints is stripped automatically). It then runs every
 exporter under `export.exporters` in turn. With no `target`, it exports the
 freshly-initialized network (useful for shape/graph checks).
 
@@ -137,4 +137,3 @@ or `ToBinarySegmentationMask` make good postprocess steps.
 
 - [Config Schema](../reference/config-schema.md) — the `export` section in context.
 - [Built-in Components](../reference/components.md) — preprocess/postprocess modules.
-</content>

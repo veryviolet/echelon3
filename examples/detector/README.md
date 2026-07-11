@@ -16,10 +16,10 @@ python gen_det_data.py --root ./det_data
 
 # 2. train (needs the detection extra for the mAP COCO backend)
 pip install "echelon3[detection]"
-DET_DATA=./det_data echelon3-train --config-dir . --config-name detector_smoke
+DET_DATA=./det_data echelon3 train --config-dir . --config-name detector_smoke
 
 # CPU-only:
-DET_DATA=./det_data echelon3-train --config-dir . --config-name detector_smoke device=cpu
+DET_DATA=./det_data echelon3 train --config-dir . --config-name detector_smoke device=cpu
 ```
 
 `mAP` starts near zero and climbs past ~0.1 within ~40 epochs — the point is to

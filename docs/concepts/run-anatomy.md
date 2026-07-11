@@ -79,8 +79,10 @@ trainer:
 
 ## Multi-GPU and logging
 
-- Under `torchrun`, the network is wrapped in `DistributedDataParallel`; without
-  it, in `DataParallel`. See [Multi-GPU (DDP)](../guide/ddp.md).
+- Multiple GPUs run as `DistributedDataParallel` — one process per GPU, spawned by
+  echelon3's built-in launcher (`gpus=[...]`) or by `torchrun`; a single GPU / CPU
+  runs in-process. (DataParallel was removed in 0.5.0.) See
+  [Multi-GPU (DDP)](../guide/ddp.md).
 - Logging and checkpoint writing happen on rank 0 only. Non-main ranks get a
   no-op logger, so nothing is double-written.
 

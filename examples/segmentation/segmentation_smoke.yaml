@@ -3,18 +3,12 @@
 # CPU or a single GPU.
 #
 #   python gen_seg_data.py --root ./seg_data
-#   SEG_DATA=./seg_data echelon3-train --config-dir . --config-name segmentation_smoke
+#   SEG_DATA=./seg_data echelon3 train --config-dir . --config-name segmentation_smoke
 #
 # Run it from this directory: the CLI puts the cwd on sys.path so `module:
 # backbone` resolves to backbone.py next to this file.
-hydra:
-  job:
-    chdir: False
-defaults:
-  - _self_
 
 device: cuda           # override with device=cpu for a CPU-only run
-device_ids: [0]
 
 net:
   module: echelon3.nets.segmenter

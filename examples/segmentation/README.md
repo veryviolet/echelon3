@@ -16,10 +16,10 @@ cd examples/segmentation
 python gen_seg_data.py --root ./seg_data
 
 # 2. train
-SEG_DATA=./seg_data echelon3-train --config-dir . --config-name segmentation_smoke
+SEG_DATA=./seg_data echelon3 train --config-dir . --config-name segmentation_smoke
 
 # CPU-only:
-SEG_DATA=./seg_data echelon3-train --config-dir . --config-name segmentation_smoke device=cpu
+SEG_DATA=./seg_data echelon3 train --config-dir . --config-name segmentation_smoke device=cpu
 ```
 
 mean-IoU starts around 0.85 and climbs past ~0.95 within ~15 epochs — the point is

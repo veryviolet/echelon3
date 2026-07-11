@@ -1,6 +1,6 @@
 """Fine-tuning entry point.
 
-Drop-in replacement for `echelon3-train` that adds three things:
+Drop-in replacement for `echelon3 train` that adds three things:
 
 * warm-start the network's state_dict from a previously trained
   checkpoint via `cfg.init_from.*`;
@@ -10,7 +10,7 @@ Drop-in replacement for `echelon3-train` that adds three things:
   instead of `net.parameters()`.
 
 When none of those config blocks are present the entry point behaves
-exactly like `echelon3-train`, so a stock baseline config also runs
+exactly like `echelon3 train`, so a stock baseline config also runs
 under this entry point unchanged.
 """
 

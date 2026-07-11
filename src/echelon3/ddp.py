@@ -1,21 +1,19 @@
 """Поддержка DistributedDataParallel (DDP).
 
-Активация автоматическая — по переменным окружения torchrun (RANK/WORLD_SIZE/
-LOCAL_RANK). Запуск:
-
-    CUDA_VISIBLE_DEVICES=4,5,6,7 torchrun --nproc_per_node=4 \
-        echelon3_train.py --config-name <config>
-
-Без torchrun ничего не меняется: тренер работает через DataParallel, как раньше.
+Активация автоматическая — по переменным окружения RANK/WORLD_SIZE/LOCAL_RANK.
+Их выставляет либо встроенный лаунчер (`echelon3 train ... gpus=[0,1,2,3]` —
+elastic_launch порождает по процессу на GPU, torchrun не нужен), либо внешний
+torchrun/srun для много-нодовых запусков. Один GPU или CPU — обычный in-process
+запуск без обёртки (DataParallel убран в 0.5.0).
 
 Семантика конфига сохранена: dataloaders.train.config.batch_size — ГЛОБАЛЬНЫЙ
-батч (как в DataParallel); при DDP он делится на world_size (см. creator.
-create_dataloaders). Чекпойнты формата DataParallel/DDP взаимозаменяемы: оба
-пишут state_dict с префиксом "module.".
+батч; при DDP он делится на world_size (см. creator.create_dataloaders).
+Чекпойнты пишут РАЗВЁРНУТЫЙ state_dict (без префикса "module."); старые файлы с
+"module." грузятся корректно — префикс снимается автоматически.
 
-Валидация в DDP исполняется только на rank 0 (через развёрнутую сеть, без
-коллективов), остальные ранки ждут на barrier; сохранение чекпойнтов — только
-rank 0. Так keep-best логика остаётся байт-в-байт прежней при любых метриках.
+Валидация в DDP СИММЕТРИЧНА: каждый ранг считает свой шард (DistributedSampler)
+через развёрнутую сеть, метрики агрегируются между рангами (torchmetrics — сами;
+кастомные Metric — через хук dist_reduce()). Сохранение чекпойнтов — только rank 0.
 """
 import os
 import signal

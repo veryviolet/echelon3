@@ -1,12 +1,6 @@
-hydra:
-  job:
-    chdir: False
 
-defaults:
-  - _self_
 
 device: cuda
-device_ids: [0]
 
 net:
   module: echelon3.nets.classifier
