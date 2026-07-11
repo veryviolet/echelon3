@@ -1,6 +1,6 @@
 # Exporting to ONNX
 
-`echelon3-export` turns a trained checkpoint into a single self-contained ONNX
+`echelon3 export` turns a trained checkpoint into a single self-contained ONNX
 graph. The key idea: the exporter fuses your **preprocess**, the **network**, and
 an optional **postprocess** into one model, so the exported graph accepts a raw
 image tensor and returns final outputs — no Python preprocessing needed at
@@ -60,7 +60,7 @@ that feeds it raw images.
 ## Running the export
 
 ```bash
-echelon3-export --config-dir configs --config-name my_experiment
+echelon3 export --config-dir configs --config-name my_experiment
 ```
 
 The exporter builds the network from `net`, and — if a `target` section is
@@ -98,7 +98,7 @@ Run it after training the smoke model:
 
 ```bash
 SMOKE_TARGET=./targets/smoke \
-    echelon3-export --config-dir examples/configs --config-name smoke
+    echelon3 export --config-dir examples/configs --config-name smoke
 ```
 
 This writes `./targets/smoke/smoke.onnx`. The graph takes a `uint8` `images`

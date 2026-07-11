@@ -49,7 +49,7 @@ by writing glue code.
 
 ## The build order
 
-`echelon3-train` assembles a run in a fixed order (see `echelon3.cli.train`), each
+`echelon3 train` assembles a run in a fixed order (see `echelon3.cli.train`), each
 step reading one top-level section of the config:
 
 ```

@@ -53,15 +53,15 @@ my_project/
         └── ...
 ```
 
-The CLI entry points (`echelon3-train`, `echelon3-export`, `echelon3-run`,
-`echelon3-evaluate`, `echelon3-finetune`) call `add_cwd_to_sys_path()` before
-Hydra loads anything. That inserts the current working directory at the front of
+The CLI entry points (`echelon3 train`, `echelon3 export`, `echelon3 run`,
+`echelon3 evaluate`, `echelon3 finetune`) call `add_cwd_to_sys_path()` before
+echelon3 inserts the current working directory at the front of
 `sys.path`, so a package sitting in your repo root resolves exactly like a
 built-in one.
 
 !!! note "Run from the repo root"
     `add_cwd_to_sys_path()` adds `os.getcwd()` — the directory you launch from,
-    not where the config lives. Run `echelon3-train` from the repo root so that
+    not where the config lives. Run `echelon3 train` from the repo root so that
     `module: my_project.nets.mynet` imports. (`python -m ...` and
     `python script.py` add the script's directory automatically; console scripts
     do not, which is exactly what this shim fixes.)
@@ -106,7 +106,7 @@ the [Config Schema](../reference/config-schema.md). Train it the usual way from
 the repo root:
 
 ```bash
-echelon3-train --config-dir configs --config-name my_experiment
+echelon3 train --config-dir configs --config-name my_experiment
 ```
 
 The same pattern extends to every subsystem — a dataset subclassing
@@ -183,7 +183,7 @@ net:
   config: { num_classes: 1 }
 ```
 
-Run `echelon3-train` from `workspace/` (or wherever `echelon3_zoo` is
+Run `echelon3 train` from `workspace/` (or wherever `echelon3_zoo` is
 importable) and the resolver finds it. No installation, no registration — a zoo
 is simply more importable code.
 

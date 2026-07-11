@@ -7,16 +7,16 @@ pip install echelon3
 ```
 
 This pulls in the core dependencies (torch, torchvision, timm, torchmetrics,
-albumentations, hydra-core, opencv-python, tensorboard, and friends) and installs
+albumentations, click, opencv-python, tensorboard, and friends) and installs
 five console scripts on your `PATH`:
 
 | Command | Purpose |
 | --- | --- |
-| `echelon3-train` | Train a model from a config. |
-| `echelon3-evaluate` | Evaluate a checkpoint against a metric. |
-| `echelon3-run` | Run inference over images/video with a runner. |
-| `echelon3-export` | Export a checkpoint to ONNX. |
-| `echelon3-finetune` | Train with warm-start, layer freezing and per-layer LR. |
+| `echelon3 train` | Train a model from a config. |
+| `echelon3 evaluate` | Evaluate a checkpoint against a metric. |
+| `echelon3 run` | Run inference over images/video with a runner. |
+| `echelon3 export` | Export a checkpoint to ONNX. |
+| `echelon3 finetune` | Train with warm-start, layer freezing and per-layer LR. |
 
 ## Optional extras
 

@@ -231,7 +231,7 @@ closure automatically.
 
 ## Runners — `module: echelon3.runners.*`
 
-For `echelon3-run` batch inference.
+For `echelon3 run` batch inference.
 
 | `module` | `type` | Purpose |
 | --- | --- | --- |
@@ -252,7 +252,7 @@ Wrap a net (as `export.wrapper`) to adapt input geometry.
 
 ## Evaluators — `module: echelon3.evaluators.*`
 
-For `echelon3-evaluate`.
+For `echelon3 evaluate`.
 
 | `module` | `type` | Purpose |
 | --- | --- | --- |

@@ -7,7 +7,7 @@ echelon3 spawns the workers itself.
 ## Multi-GPU in one command
 
 ```bash
-echelon3-train --config-dir configs --config-name my_experiment gpus=[0,1,2,3]
+echelon3 train --config-dir configs --config-name my_experiment gpus=[0,1,2,3]
 ```
 
 `gpus` is a **root config key**. Set it in the config, or override it on the CLI.
@@ -35,7 +35,7 @@ environment it assumes it is already a worker and does not spawn again:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nproc_per_node=4 \
-    $(which echelon3-train) --config-dir configs --config-name my_experiment
+    $(which echelon3) train --config-dir configs --config-name my_experiment
 ```
 
 For a single node, `gpus=[...]` and `torchrun` are equivalent — prefer `gpus` for
@@ -150,7 +150,7 @@ trainer:
     Results differ from old fp32 runs (usually negligibly, and faster). Set
     `precision: fp32` to reproduce fp32 exactly.
 
-`echelon3-evaluate` and `echelon3-run` autocast the same way (default bf16); set
+`echelon3 evaluate` and `echelon3 run` autocast the same way (default bf16); set
 `precision: fp32` at the **config root** to force fp32 for those.
 
 ## torch.compile
