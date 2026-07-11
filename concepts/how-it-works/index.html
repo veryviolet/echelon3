@@ -1197,7 +1197,7 @@ calls it to get the object. This is why you can write:</p>
 same for <code>backbone</code> / <code>neck</code> / <code>head</code>. You compose networks by nesting triples, not
 by writing glue code.</p>
 <h2 id="the-build-order">The build order<a class="headerlink" href="#the-build-order" title="Permanent link">&para;</a></h2>
-<p><code>echelon3-train</code> assembles a run in a fixed order (see <code>echelon3.cli.train</code>), each
+<p><code>echelon3 train</code> assembles a run in a fixed order (see <code>echelon3.cli.train</code>), each
 step reading one top-level section of the config:</p>
 <div class="highlight"><pre><span></span><code>transform  →  augmentations (albumentations) + preprocess (torch.nn.Sequential)
 data       →  train dataset + test dataset(s)

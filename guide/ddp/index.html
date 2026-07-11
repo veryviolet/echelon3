@@ -1231,7 +1231,7 @@
 (DDP)</strong> — one process per GPU. You do <strong>not</strong> need <code>torchrun</code>: name the GPUs and
 echelon3 spawns the workers itself.</p>
 <h2 id="multi-gpu-in-one-command">Multi-GPU in one command<a class="headerlink" href="#multi-gpu-in-one-command" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code>echelon3-train<span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment<span class="w"> </span><span class="nv">gpus</span><span class="o">=[</span><span class="m">0</span>,1,2,3<span class="o">]</span>
+<div class="highlight"><pre><span></span><code>echelon3<span class="w"> </span>train<span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment<span class="w"> </span><span class="nv">gpus</span><span class="o">=[</span><span class="m">0</span>,1,2,3<span class="o">]</span>
 </code></pre></div>
 <p><code>gpus</code> is a <strong>root config key</strong>. Set it in the config, or override it on the CLI.
 Leave it out and echelon3 uses <strong>every visible GPU on the node</strong>:</p>
@@ -1252,7 +1252,7 @@ key no longer selects multiple GPUs — use <code>gpus</code>.</p>
 remain available for multi-node or elastic jobs. If echelon3 finds <code>RANK</code> in the
 environment it assumes it is already a worker and does not spawn again:</p>
 <div class="highlight"><pre><span></span><code><span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">0</span>,1,2,3<span class="w"> </span>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span><span class="k">$(</span>which<span class="w"> </span>echelon3-train<span class="k">)</span><span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment
+<span class="w">    </span><span class="k">$(</span>which<span class="w"> </span>echelon3<span class="k">)</span><span class="w"> </span>train<span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment
 </code></pre></div>
 <p>For a single node, <code>gpus=[...]</code> and <code>torchrun</code> are equivalent — prefer <code>gpus</code> for
 the shorter command; reach for <code>torchrun</code> when you span nodes.</p>
@@ -1354,7 +1354,7 @@ modern hardware this is a large speedup at negligible quality cost.</p>
 <p>Results differ from old fp32 runs (usually negligibly, and faster). Set
 <code>precision: fp32</code> to reproduce fp32 exactly.</p>
 </div>
-<p><code>echelon3-evaluate</code> and <code>echelon3-run</code> autocast the same way (default bf16); set
+<p><code>echelon3 evaluate</code> and <code>echelon3 run</code> autocast the same way (default bf16); set
 <code>precision: fp32</code> at the <strong>config root</strong> to force fp32 for those.</p>
 <h2 id="torchcompile">torch.compile<a class="headerlink" href="#torchcompile" title="Permanent link">&para;</a></h2>
 <p>bf16 only speeds up <strong>compute-bound</strong> work. A small network on a big GPU is often

@@ -1003,6 +1003,20 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
+<h2 id="080-2026-07-11">0.8.0 — 2026-07-11<a class="headerlink" href="#080-2026-07-11" title="Permanent link">&para;</a></h2>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Dropped Hydra; the CLI is now a single <code>echelon3</code> command</strong> with subcommands
+  <code>train | finetune | evaluate | export | run</code> (the old <code>echelon3-&lt;cmd&gt;</code> scripts stay
+  as transitional aliases). Config loading and CLI overrides run on <strong>OmegaConf</strong>
+  directly. The override syntax is compatible — <code>key=value</code>, <code>+key</code>, <code>++key</code>, <code>~key</code>
+  (delete), typed values, lists, <code>${oc.env:...}</code> — with no strict/struct footgun
+  (<code>key=value</code> adds a new key; <code>+</code> is optional). <code>defaults:</code> composition is supported
+  (base configs + config-groups + <code>_self_</code>), so existing configs — including composed
+  ones — run unchanged; <code>hydra:</code> blocks and <code>hydra.*</code> overrides are ignored. This
+  removes the recurring Hydra footguns (cwd/output-dir coupling, exception wrapping,
+  struct-mode prefixes) and a heavy dependency (<code>hydra-core</code> → <code>click</code>).</li>
+</ul>
 <h2 id="0712-2026-07-11">0.7.12 — 2026-07-11<a class="headerlink" href="#0712-2026-07-11" title="Permanent link">&para;</a></h2>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1033,7 +1047,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   next epoch. The bar is now re-created only when batches remain in the epoch.</li>
 </ul>
 <h2 id="0710-2026-07-10">0.7.10 — 2026-07-10<a class="headerlink" href="#0710-2026-07-10" title="Permanent link">&para;</a></h2>
-<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>DDP launcher messages now print after the banner and in the same colour.</strong> The
   <code>--&gt; DDP: launching …</code> / dataloader-RAM / warning lines are emitted by the parent
@@ -1084,7 +1098,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   torchmetrics are unaffected.</li>
 </ul>
 <h2 id="076-2026-07-08">0.7.6 — 2026-07-08<a class="headerlink" href="#076-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>The per-component <code>config:</code> block is now optional everywhere, uniformly.</strong> One
   rule across every <code>create_*</code> (net, backbone, dataset, loss, metric, optimizer,
@@ -1121,7 +1135,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   which pickles cleanly; <code>spawn</code> works again with worker reaping intact.</li>
 </ul>
 <h2 id="074-2026-07-08">0.7.4 — 2026-07-08<a class="headerlink" href="#074-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Revert the per-component <code>config:</code>-block optionality added in 0.7.3: <code>net</code>,
   datasets, and schedulers require their <code>config:</code> block again (as before 0.7.3).
@@ -1132,7 +1146,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   <code>keep_best_on</code>) is unchanged.</li>
 </ul>
 <h2 id="073-2026-07-08">0.7.3 — 2026-07-08<a class="headerlink" href="#073-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
+<h3 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>CLI output is now uniformly English and single-colour.</strong> A handful of runtime
   messages (and raised errors) were Russian and/or highlighted in yellow, which
@@ -1191,7 +1205,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   (<code>ranks × num_workers × prefetch_factor</code>) and warns when it is large — these are
   <strong>per-rank</strong> and multiply under DDP, the common cause of the OOM above.</li>
 </ul>
-<h3 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
+<h3 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>torch.compile</code> is no longer marked experimental</strong> — validated on single-GPU
   and 4×H200 DDP including production image-in-image runs. The <code>compile</code> /
@@ -1210,7 +1224,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   round-trip). The actual speedup and any shape-driven recompiles are
   model-dependent (see <code>guide/ddp.md</code>).</li>
 </ul>
-<h3 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h3>
+<h3 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>PairTrainer</code> calls the network positionally</strong> — <code>net(base, query, True)</code>
   instead of <code>net(base, query, return_features=True)</code>. Pair nets name the third
@@ -1259,7 +1273,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
 <h2 id="050-2026-07-08">0.5.0 — 2026-07-08<a class="headerlink" href="#050-2026-07-08" title="Permanent link">&para;</a></h2>
 <p>Multi-GPU and performance release. <strong>Breaking</strong>: DataParallel is gone and mixed
 precision defaults to bf16.</p>
-<h3 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h3>
+<h3 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Multi-GPU is built-in DDP, launched from the CLI — no <code>torchrun</code> needed.</strong>
   Pass <code>gpus=[0,1,2,3]</code> (a root config key; default = all visible GPUs on the

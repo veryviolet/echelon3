@@ -1099,7 +1099,7 @@
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>echelon3
 </code></pre></div>
 <p>This pulls in the core dependencies (torch, torchvision, timm, torchmetrics,
-albumentations, hydra-core, opencv-python, tensorboard, and friends) and installs
+albumentations, click, opencv-python, tensorboard, and friends) and installs
 five console scripts on your <code>PATH</code>:</p>
 <table>
 <thead>
@@ -1110,23 +1110,23 @@ five console scripts on your <code>PATH</code>:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>echelon3-train</code></td>
+<td><code>echelon3 train</code></td>
 <td>Train a model from a config.</td>
 </tr>
 <tr>
-<td><code>echelon3-evaluate</code></td>
+<td><code>echelon3 evaluate</code></td>
 <td>Evaluate a checkpoint against a metric.</td>
 </tr>
 <tr>
-<td><code>echelon3-run</code></td>
+<td><code>echelon3 run</code></td>
 <td>Run inference over images/video with a runner.</td>
 </tr>
 <tr>
-<td><code>echelon3-export</code></td>
+<td><code>echelon3 export</code></td>
 <td>Export a checkpoint to ONNX.</td>
 </tr>
 <tr>
-<td><code>echelon3-finetune</code></td>
+<td><code>echelon3 finetune</code></td>
 <td>Train with warm-start, layer freezing and per-layer LR.</td>
 </tr>
 </tbody>

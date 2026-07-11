@@ -1133,8 +1133,8 @@ class and point a config at it; you never edit the framework.</p>
   segmentation and detection datasets, balanced/classwise/multipart dataloaders,
   an albumentations + torch preprocessing pipeline, classification/segmentation/
   detection losses and metrics, timm-backed classifier and segmenter networks.</li>
-<li>CLI entry points <code>echelon3-train</code>, <code>echelon3-evaluate</code>, <code>echelon3-run</code>,
-  <code>echelon3-export</code>, <code>echelon3-finetune</code> (all Hydra-based, <code>--config-dir</code>).</li>
+<li>CLI entry points <code>echelon3 train</code>, <code>echelon3 evaluate</code>, <code>echelon3 run</code>,
+  <code>echelon3 export</code>, <code>echelon3 finetune</code> (config via <code>--config-dir</code> / <code>--config-name</code>).</li>
 <li>ONNX export and a TensorBoard logger.</li>
 </ul>
 <h2 id="quickstart">Quickstart<a class="headerlink" href="#quickstart" title="Permanent link">&para;</a></h2>
@@ -1143,7 +1143,7 @@ class and point a config at it; you never edit the framework.</p>
 <p>Generate a tiny synthetic dataset and train a classifier on it:</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># from a checkout of the repo (examples/ ships the smoke config)</span>
 python<span class="w"> </span>examples/gen_smoke_data.py<span class="w"> </span>--root<span class="w"> </span>./smoke_data
-<span class="nv">SMOKE_DATA_ROOT</span><span class="o">=</span>./smoke_data<span class="w"> </span>echelon3-train<span class="w"> </span><span class="se">\</span>
+<span class="nv">SMOKE_DATA_ROOT</span><span class="o">=</span>./smoke_data<span class="w"> </span>echelon3<span class="w"> </span>train<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--config-dir<span class="w"> </span>examples/configs<span class="w"> </span>--config-name<span class="w"> </span>smoke
 </code></pre></div>
 <p>See <a href="getting-started/installation/">Getting Started</a> to install and run your own

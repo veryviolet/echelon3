@@ -1905,7 +1905,7 @@ highest-numbered checkpoint found there.</p>
 <span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SegmentationTensorboardLogger</span>
 </code></pre></div>
 <h2 id="export-optional"><code>export</code> (optional)<a class="headerlink" href="#export-optional" title="Permanent link">&para;</a></h2>
-<p>Read by <code>create_exporters</code> for <code>echelon3-export</code>. Optional <code>preprocess</code> /
+<p>Read by <code>create_exporters</code> for <code>echelon3 export</code>. Optional <code>preprocess</code> /
 <code>postprocess</code> maps (same shape as <code>transform.*.preprocess</code>) are fused <strong>around</strong>
 the network so the exported graph is <code>preprocess -&gt; net -&gt; postprocess</code>; then one
 or more named <code>exporters</code> run. See <a href="../../guide/export/">Exporting to ONNX</a>.</p>
@@ -1925,7 +1925,7 @@ or more named <code>exporters</code> run. See <a href="../../guide/export/">Expo
 <span class="w">        </span><span class="nt">use_tracing</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </code></pre></div>
 <h2 id="runner-optional"><code>runner</code> (optional)<a class="headerlink" href="#runner-optional" title="Permanent link">&para;</a></h2>
-<p>Read by <code>echelon3-run</code> via <code>create_universal(cfg.runner)</code>. The runner processes
+<p>Read by <code>echelon3 run</code> via <code>create_universal(cfg.runner)</code>. The runner processes
 a folder of images or a video through <code>preprocess -&gt; net -&gt; postprocess</code>. It
 reuses <code>export.preprocess</code> / <code>export.postprocess</code>, and an optional
 <code>export.wrapper</code> triple (e.g. <code>echelon3.wrappers.spatial.PadToMultiplier</code>).</p>
@@ -1935,7 +1935,7 @@ reuses <code>export.preprocess</code> / <code>export.postprocess</code>, and an 
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> source</span><span class="p">:</span><span class="w"> </span><span class="nv">./inputs</span><span class="p p-Indicator">,</span><span class="nt"> target</span><span class="p">:</span><span class="w"> </span><span class="nv">./outputs</span><span class="p p-Indicator">,</span><span class="nt"> colormap</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">1</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">255</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">]},</span><span class="nt"> opacity</span><span class="p">:</span><span class="w"> </span><span class="nv">0.5</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <h2 id="evaluator-optional"><code>evaluator</code> (optional)<a class="headerlink" href="#evaluator-optional" title="Permanent link">&para;</a></h2>
-<p>Read by <code>echelon3-evaluate</code>. <code>create_evaluator</code> builds the evaluator with the
+<p>Read by <code>echelon3 evaluate</code>. <code>create_evaluator</code> builds the evaluator with the
 network, the test dataloader, and the single metric named by <code>evaluator.metric</code>
 (looked up in <code>metrics</code>).</p>
 <div class="highlight"><pre><span></span><code><span class="nt">evaluator</span><span class="p">:</span>
@@ -1945,7 +1945,7 @@ network, the test dataloader, and the single metric named by <code>evaluator.met
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> scores_and_labels</span><span class="p">:</span><span class="w"> </span><span class="nv">./targets/my_experiment/errors</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <h2 id="init_from-finetune-optional"><code>init_from</code> / <code>finetune</code> (optional)<a class="headerlink" href="#init_from-finetune-optional" title="Permanent link">&para;</a></h2>
-<p>Only <code>echelon3-finetune</code> reads these; a stock training config runs unchanged
+<p>Only <code>echelon3 finetune</code> reads these; a stock training config runs unchanged
 under that entry point. See <a href="../../guide/extending/">Extending</a> for the workflow.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">init_from</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">checkpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./targets/base/checkpoint-40.tar</span>
