@@ -244,11 +244,22 @@ def create_single_dataloader(config: DictConfig, dataset):
 
 def _pdeathsig_worker_init(worker_id, _user_fn=None):
     """В воркере: PDEATHSIG (умирает вместе с рангом → не осиротеет и не держит
-    /dev/shm/RAM), затем пользовательский worker_init_fn, если был.
+    /dev/shm/RAM) + игнор SIGINT, затем пользовательский worker_init_fn, если был.
+
+    SIGINT (Ctrl-C) идёт ВСЕЙ группе процессов. Если воркер умрёт от него первым,
+    главный процесс, ждущий батч в next(iterator), получит не KeyboardInterrupt, а
+    "DataLoader worker exited unexpectedly" → traceback вместо чистой остановки.
+    Поэтому воркер игнорирует SIGINT: прерывание обработает главный процесс, а
+    воркеров затем снимет PDEATHSIG.
 
     ВАЖНО: это модульная функция, а НЕ замыкание — иначе DataLoader с
     ``multiprocessing_context='spawn'`` не смог бы её запиклить (регрессия 0.7.2)."""
+    import signal
     ddp.set_pdeathsig()
+    try:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except Exception:
+        pass
     if callable(_user_fn):
         _user_fn(worker_id)
 
