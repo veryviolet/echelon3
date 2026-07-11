@@ -51,8 +51,10 @@ def _train(cfg: DictConfig):
             sys.stdout = open(os.devnull, 'w')  # печатает только rank 0
     else:
         device = resolve_single_device(cfg, torch.cuda.is_available())
-        if device.type == 'cuda':
-            torch.cuda.set_device(device)  # .cuda()/autocast-дефолты — на нужную карту
+        if device.type == 'cuda' and device.index is not None:
+            # cuda:{idx} — двигаем дефолт устройства (.cuda()/autocast на нужную карту);
+            # для голого 'cuda' индекса нет, дефолт и так 0, а set_device тут падал бы.
+            torch.cuda.set_device(device)
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
     print(Fore.CYAN)  # воркер: свой цвет (баннер уже напечатан родителем)

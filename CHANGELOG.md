@@ -4,6 +4,22 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.12 — 2026-07-11
+
+### Fixed
+
+- **Single-GPU `device=cuda` runs crashed** (regression since 0.7.9). Non-DDP device
+  selection returns `torch.device('cuda')` (no index) when no `gpus=` is given, and
+  `torch.cuda.set_device()` rejected it ("Expected a torch.device with a specified
+  index"). `set_device` is now called only for an explicit `cuda:{index}` (from
+  `gpus=`); bare `cuda` already defaults to device 0.
+- **Ctrl-C now stops cleanly when DataLoader workers are used.** SIGINT reaches the
+  whole process group, so a worker could die first and the main process (waiting in
+  `next(iterator)`) saw "DataLoader worker exited unexpectedly" (a `RuntimeError`)
+  instead of `KeyboardInterrupt`, dumping a traceback — the real cause behind the
+  original Ctrl-C complaint (a race: sometimes clean, sometimes not). Workers now
+  ignore SIGINT; the main process handles the interrupt and reaps them via PDEATHSIG.
+
 ## 0.7.11 — 2026-07-10
 
 ### Fixed
