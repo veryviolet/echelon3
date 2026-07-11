@@ -20,7 +20,6 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-import hydra
 import torch
 from omegaconf import DictConfig
 from colorama import Fore, Style
@@ -31,7 +30,7 @@ import sys
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
 from echelon3 import warncollect
 from echelon3.creator import (
     create_datasets, create_augments, create_preprocesses, create_dataloaders,
@@ -71,7 +70,6 @@ def _load_init_weights(net: torch.nn.Module, ckpt_path: str, strict: bool = Fals
     return len(new_sd) - len(missing)
 
 
-@hydra.main(version_base=None, config_path=None)
 def finetune_app(cfg: DictConfig):
     # Баннер + Fore.CYAN — в РОДИТЕЛЕ до DDP-лаунча (см. trainer_app): баннер первым,
     # сообщения лаунчера наследуют cyan. Спавн-воркеры баннер не повторяют.
@@ -216,14 +214,7 @@ def _finetune(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-def main():
-    add_cwd_to_sys_path()
-    try:
-        finetune_app()
-    except KeyboardInterrupt:
-        # Прерывание на этапе сетапа (до trainer.train()) — тоже чисто, без traceback.
-        print('\n--> Interrupted by user (Ctrl-C).', file=sys.stderr)
-        sys.exit(130)
+main = build_cli(finetune_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
 
 
 if __name__ == "__main__":
