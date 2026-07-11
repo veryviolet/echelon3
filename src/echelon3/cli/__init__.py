@@ -32,6 +32,37 @@ def resolve_gpus(cfg):
     return list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
 
 
+def build_cli(app_fn):
+    """click-команда взамен ``@hydra.main``: грузит OmegaConf-конфиг + Hydra-подобные
+    оверрайды (``key=`` / ``+`` / ``++`` / ``~``) и зовёт ``app_fn(cfg)``.
+
+    Прерывание (Ctrl-C) на этапе загрузки/сетапа — чисто, без traceback (в самом
+    обучении Ctrl-C ловится глубже, в trainer-цикле)."""
+    import click
+    from echelon3.cli.config import load_config
+
+    @click.command(context_settings={
+        "ignore_unknown_options": True,
+        "allow_extra_args": True,
+        "help_option_names": ["-h", "--help"],
+    })
+    @click.option("--config-dir", "-cd", default=".", show_default=True,
+                  help="Directory to load the config from.")
+    @click.option("--config-name", "-cn", required=True,
+                  help="Config file name (with or without .yaml).")
+    @click.argument("overrides", nargs=-1, type=click.UNPROCESSED)
+    def _cmd(config_dir, config_name, overrides):
+        add_cwd_to_sys_path()
+        try:
+            cfg = load_config(config_name, config_dir, overrides)
+            app_fn(cfg)
+        except KeyboardInterrupt:
+            print("\n--> Interrupted by user (Ctrl-C).", file=sys.stderr)
+            sys.exit(130)
+
+    return _cmd
+
+
 def resolve_single_device(cfg, cuda_available: bool):
     """Устройство для НЕ-DDP запуска.
 

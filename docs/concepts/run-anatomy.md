@@ -1,6 +1,6 @@
 # Anatomy of a Run
 
-Once `echelon3-train` has assembled the components (see
+Once `echelon3 train` has assembled the components (see
 [How It Works](how-it-works.md)), control passes to the trainer's `train()` method.
 This page describes what the built-in `echelon3.trainers.baseline.Trainer` does, so
 that the `trainer` section of a config makes sense.

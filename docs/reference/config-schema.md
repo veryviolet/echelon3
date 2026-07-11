@@ -358,7 +358,7 @@ mlops:
 
 ## `export` (optional)
 
-Read by `create_exporters` for `echelon3-export`. Optional `preprocess` /
+Read by `create_exporters` for `echelon3 export`. Optional `preprocess` /
 `postprocess` maps (same shape as `transform.*.preprocess`) are fused **around**
 the network so the exported graph is `preprocess -> net -> postprocess`; then one
 or more named `exporters` run. See [Exporting to ONNX](../guide/export.md).
@@ -382,7 +382,7 @@ export:
 
 ## `runner` (optional)
 
-Read by `echelon3-run` via `create_universal(cfg.runner)`. The runner processes
+Read by `echelon3 run` via `create_universal(cfg.runner)`. The runner processes
 a folder of images or a video through `preprocess -> net -> postprocess`. It
 reuses `export.preprocess` / `export.postprocess`, and an optional
 `export.wrapper` triple (e.g. `echelon3.wrappers.spatial.PadToMultiplier`).
@@ -396,7 +396,7 @@ runner:
 
 ## `evaluator` (optional)
 
-Read by `echelon3-evaluate`. `create_evaluator` builds the evaluator with the
+Read by `echelon3 evaluate`. `create_evaluator` builds the evaluator with the
 network, the test dataloader, and the single metric named by `evaluator.metric`
 (looked up in `metrics`).
 
@@ -410,7 +410,7 @@ evaluator:
 
 ## `init_from` / `finetune` (optional)
 
-Only `echelon3-finetune` reads these; a stock training config runs unchanged
+Only `echelon3 finetune` reads these; a stock training config runs unchanged
 under that entry point. See [Extending](../guide/extending.md) for the workflow.
 
 ```yaml

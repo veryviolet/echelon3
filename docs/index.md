@@ -27,8 +27,8 @@ class and point a config at it; you never edit the framework.
   segmentation and detection datasets, balanced/classwise/multipart dataloaders,
   an albumentations + torch preprocessing pipeline, classification/segmentation/
   detection losses and metrics, timm-backed classifier and segmenter networks.
-- CLI entry points `echelon3-train`, `echelon3-evaluate`, `echelon3-run`,
-  `echelon3-export`, `echelon3-finetune` (all Hydra-based, `--config-dir`).
+- CLI entry points `echelon3 train`, `echelon3 evaluate`, `echelon3 run`,
+  `echelon3 export`, `echelon3 finetune` (config via `--config-dir` / `--config-name`).
 - ONNX export and a TensorBoard logger.
 
 ## Quickstart
@@ -42,7 +42,7 @@ Generate a tiny synthetic dataset and train a classifier on it:
 ```bash
 # from a checkout of the repo (examples/ ships the smoke config)
 python examples/gen_smoke_data.py --root ./smoke_data
-SMOKE_DATA_ROOT=./smoke_data echelon3-train \
+SMOKE_DATA_ROOT=./smoke_data echelon3 train \
     --config-dir examples/configs --config-name smoke
 ```
 

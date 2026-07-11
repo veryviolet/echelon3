@@ -4,6 +4,21 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.0 — 2026-07-11
+
+### Changed
+
+- **Dropped Hydra; the CLI is now a single `echelon3` command** with subcommands
+  `train | finetune | evaluate | export | run` (the old `echelon3-<cmd>` scripts stay
+  as transitional aliases). Config loading and CLI overrides run on **OmegaConf**
+  directly. The override syntax is compatible — `key=value`, `+key`, `++key`, `~key`
+  (delete), typed values, lists, `${oc.env:...}` — with no strict/struct footgun
+  (`key=value` adds a new key; `+` is optional). `defaults:` composition is supported
+  (base configs + config-groups + `_self_`), so existing configs — including composed
+  ones — run unchanged; `hydra:` blocks and `hydra.*` overrides are ignored. This
+  removes the recurring Hydra footguns (cwd/output-dir coupling, exception wrapping,
+  struct-mode prefixes) and a heavy dependency (`hydra-core` → `click`).
+
 ## 0.7.12 — 2026-07-11
 
 ### Fixed

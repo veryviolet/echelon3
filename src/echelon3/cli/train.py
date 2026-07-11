@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-import hydra
 import torch
 import os
 import sys
@@ -10,7 +9,7 @@ from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
 from echelon3 import warncollect
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
@@ -18,7 +17,6 @@ from echelon3.creator import create_net, create_loss, create_optimizer, create_s
 from echelon3.creator import create_metrics, create_mlops_logger, create_universal
 
 
-@hydra.main(version_base=None, config_path=None)
 def trainer_app(cfg: DictConfig):
     # Баннер + Fore.CYAN печатаем в РОДИТЕЛЕ до DDP-лаунча: тогда он идёт ПЕРЕД
     # сообщениями лаунчера, а те наследуют cyan (colorama держит цвет в процессе) —
@@ -52,8 +50,9 @@ def _train(cfg: DictConfig):
     else:
         device = resolve_single_device(cfg, torch.cuda.is_available())
         if device.type == 'cuda' and device.index is not None:
-            # cuda:{idx} — двигаем дефолт устройства (.cuda()/autocast на нужную карту);
-            # для голого 'cuda' индекса нет, дефолт и так 0, а set_device тут падал бы.
+            # cuda:{idx} — двигаем дефолт устройства, чтобы .cuda()/autocast легли на
+            # нужную карту. Для голого 'cuda' (индекса нет) дефолт и так 0 — set_device
+            # тут падал бы (нужен индекс).
             torch.cuda.set_device(device)
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
@@ -221,14 +220,7 @@ def _train(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-def main():
-    add_cwd_to_sys_path()
-    try:
-        trainer_app()
-    except KeyboardInterrupt:
-        # Прерывание на этапе сетапа (до trainer.train()) — тоже чисто, без traceback.
-        print('\n--> Interrupted by user (Ctrl-C).', file=sys.stderr)
-        sys.exit(130)
+main = build_cli(trainer_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
 
 
 if __name__ == "__main__":

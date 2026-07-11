@@ -26,10 +26,10 @@ pip install -e ".[export]"
 python examples/gen_smoke_data.py --root ./smoke_data
 
 SMOKE_DATA_ROOT=./smoke_data SMOKE_TARGET=./targets/smoke \
-    echelon3-train --config-dir examples/configs --config-name smoke
+    echelon3 train --config-dir examples/configs --config-name smoke
 ```
 
-`--config-dir` tells Hydra where your configs live; `--config-name` selects one
+`--config-dir` tells echelon3 where your configs live; `--config-name` selects one
 (without the `.yaml`). The two environment variables are read by the config via
 `${oc.env:...}` defaults — the config itself carries no absolute paths.
 
@@ -40,10 +40,10 @@ trivially separable, so accuracy reaches 1.0 within a few epochs. Checkpoints an
 TensorBoard event files are written under `SMOKE_TARGET`.
 
 !!! tip "Override anything on the command line"
-    Every config value is a Hydra override. To train longer:
+    Every config value can be overridden on the command line. To train longer:
 
     ```bash
-    echelon3-train --config-dir examples/configs --config-name smoke \
+    echelon3 train --config-dir examples/configs --config-name smoke \
         trainer.config.epochs=10 optimizer.config.lr=0.0005
     ```
 
@@ -53,7 +53,7 @@ The smoke config includes an `export` section, so:
 
 ```bash
 SMOKE_TARGET=./targets/smoke \
-    echelon3-export --config-dir examples/configs --config-name smoke
+    echelon3 export --config-dir examples/configs --config-name smoke
 ```
 
 writes `./targets/smoke/smoke.onnx`, wrapping the preprocessing and the network

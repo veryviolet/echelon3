@@ -1,4 +1,3 @@
-import hydra
 import torch
 from omegaconf import DictConfig
 from colorama import Fore, Style
@@ -6,12 +5,11 @@ from colorama import Fore, Style
 from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
 from echelon3 import ddp
-from echelon3.cli import add_cwd_to_sys_path
+from echelon3.cli import add_cwd_to_sys_path, build_cli
 
 from echelon3.creator import create_net, create_checkpoint_manager, create_exporters
 
 
-@hydra.main(version_base=None, config_path=None)
 def exporter_app(cfg: DictConfig):
 
     device = torch.device('cpu')
@@ -59,9 +57,7 @@ def exporter_app(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-def main():
-    add_cwd_to_sys_path()
-    exporter_app()
+main = build_cli(exporter_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
 
 
 if __name__ == "__main__":
