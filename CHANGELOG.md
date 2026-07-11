@@ -4,6 +4,21 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.7.11 — 2026-07-10
+
+### Fixed
+
+- **Ctrl-C now stops cleanly instead of dumping a traceback.** `KeyboardInterrupt`
+  is handled separately from real errors — a one-line "Interrupted by user (Ctrl-C)"
+  message and exit code 130, no traceback. Under DDP the launcher also catches
+  torchelastic's `SignalException` (SIGINT reaches the whole process group) and exits
+  cleanly; workers hard-exit (130) so peers and DataLoader workers are still reaped.
+- **Stray training progress bar after validation.** With
+  `times_to_validate_per_epoch=1` (validate at the end of each epoch) the training
+  bar was re-created after the "Evaluating" bar even though the epoch had already
+  finished, printing a phantom "Training epoch N" line between the validation and the
+  next epoch. The bar is now re-created only when batches remain in the epoch.
+
 ## 0.7.10 — 2026-07-10
 
 ### Changed

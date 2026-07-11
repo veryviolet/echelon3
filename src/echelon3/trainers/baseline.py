@@ -398,6 +398,15 @@ class Trainer:
 
             self._global_step += 1
 
+            if self.losses_without_weights is not None:
+                train_progress.set_postfix(
+                    {
+                        l: f"{float(v.detach() if isinstance(v, torch.Tensor) else v):.4f}"
+                        for l, v in self.losses_without_weights.items()
+                    }
+                )
+            train_progress.update(1)
+
             if (
                 (batch + 1 - (total_batches % self._times_to_validate_per_epoch)) != 0
                 and (batch + 1 - (total_batches % self._times_to_validate_per_epoch))
@@ -411,24 +420,19 @@ class Trainer:
                 self.validate_and_check_for_saving()
                 self.prepare_network_for_train()
 
-                train_progress = tqdm(
-                    initial=0,
-                    total=total_batches,
-                    desc=f"--> Training epoch {self._current_epoch}",
-                    ncols=0,
-                    dynamic_ncols=True,
-                    disable=not ddp.is_main(),
-                )
-                train_progress.n = batch
-
-            if self.losses_without_weights is not None:
-                train_progress.set_postfix(
-                    {
-                        l: f"{float(v.detach() if isinstance(v, torch.Tensor) else v):.4f}"
-                        for l, v in self.losses_without_weights.items()
-                    }
-                )
-            train_progress.update(1)
+                # Новый бар — только если в эпохе ЕЩЁ остались батчи. На последней
+                # итерации (T=1: валидация в конце эпохи) эпоха уже завершена, и
+                # пересоздание давало паразитную строку «Training epoch N» уже ПОСЛЕ
+                # «Evaluating» (перед «Training epoch N+1»).
+                if batch + 1 < total_batches:
+                    train_progress = tqdm(
+                        initial=batch + 1,
+                        total=total_batches,
+                        desc=f"--> Training epoch {self._current_epoch}",
+                        ncols=0,
+                        dynamic_ncols=True,
+                        disable=not ddp.is_main(),
+                    )
 
         train_progress.close()
         if self._scheduler is not None:

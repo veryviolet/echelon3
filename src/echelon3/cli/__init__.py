@@ -119,8 +119,19 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     # Резолвим интерполяции в родителе, чтобы все воркеры получили идентичный cfg.
     resolved = OmegaConf.create(OmegaConf.to_container(cfg, resolve=True))
     from torch.distributed.elastic.multiprocessing.errors import ChildFailedError
+    # elastic на SIGINT/SIGTERM (Ctrl-C ушёл всей группе) кидает SignalException —
+    # ловим её как штатное прерывание, а не как падёж, чтобы не было traceback.
+    _interrupt = (KeyboardInterrupt,)
+    try:
+        from torch.distributed.elastic.multiprocessing.api import SignalException
+        _interrupt = (KeyboardInterrupt, SignalException)
+    except Exception:
+        pass
     try:
         elastic_launch(launch_cfg, train_fn)(resolved)
+    except _interrupt:
+        print('\n--> Interrupted by user (Ctrl-C), workers stopped.', file=sys.stderr)
+        raise SystemExit(130)
     except ChildFailedError:
         # Воркер умер (частая причина — RAM/CUDA-OOM от num_workers × prefetch ×
         # ранги). Сообщаем явно, а не выходим молча по чужому traceback.

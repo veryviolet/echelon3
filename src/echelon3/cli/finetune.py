@@ -185,14 +185,20 @@ def _finetune(cfg: DictConfig):
     print(f'--> Training... ')
     try:
         trainer.train()
-    except (Exception, KeyboardInterrupt):
-        # Ловим и Ctrl-C. Traceback в stderr (stdout не-главных рангов заглушён).
-        # Под DDP — жёсткий выход: destroy_process_group() может зависнуть на
-        # NCCL-teardown, тогда упавший ранг не выходит и elastic молча ждёт (тихий
-        # вис). os._exit гарантирует смерть ранка → лаунчер снимает пиров, а
-        # DataLoader-воркеров добивает PDEATHSIG.
+    except KeyboardInterrupt:
+        # Ctrl-C — штатная остановка, без пугающего traceback.
+        if ddp.is_main():
+            print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
+            sys.stderr.flush()
+        if ddp.is_ddp():
+            os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров, PDEATHSIG — воркеров
+        raise SystemExit(130)
+    except Exception:
+        # Traceback в stderr (stdout не-главных рангов заглушён). Под DDP — жёсткий
+        # выход: destroy_process_group() может зависнуть на NCCL-teardown → тихий вис.
+        # os._exit → лаунчер снимает пиров, DataLoader-воркеров добивает PDEATHSIG.
         import traceback
-        print(f'[rank {ddp.rank()}] trainer.train() interrupted/failed:', file=sys.stderr)
+        print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
         if ddp.is_ddp():
             sys.stderr.flush()
@@ -212,7 +218,12 @@ def _finetune(cfg: DictConfig):
 
 def main():
     add_cwd_to_sys_path()
-    finetune_app()
+    try:
+        finetune_app()
+    except KeyboardInterrupt:
+        # Прерывание на этапе сетапа (до trainer.train()) — тоже чисто, без traceback.
+        print('\n--> Interrupted by user (Ctrl-C).', file=sys.stderr)
+        sys.exit(130)
 
 
 if __name__ == "__main__":

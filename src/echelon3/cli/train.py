@@ -187,18 +187,23 @@ def _train(cfg: DictConfig):
     print(f'--> Training... ')
     try:
         trainer.train()
-    except (Exception, KeyboardInterrupt):
-        # Ловим и KeyboardInterrupt (Ctrl-C) — иначе он шёл бы мимо этого пути.
+    except KeyboardInterrupt:
+        # Ctrl-C — штатная остановка, без пугающего traceback.
+        if ddp.is_main():
+            print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
+            sys.stderr.flush()
+        if ddp.is_ddp():
+            os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров, PDEATHSIG — воркеров
+        raise SystemExit(130)
+    except Exception:
         # Traceback печатаем ДО shutdown в stderr (stdout не-главных ранков заглушён).
         import traceback
-        print(f'[rank {ddp.rank()}] trainer.train() interrupted/failed:', file=sys.stderr)
+        print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
         if ddp.is_ddp():
-            # Чистый destroy_process_group() может сам зависнуть на NCCL-teardown,
-            # пока в группе висит недоделанный коллектив — тогда упавший ранг не
-            # выходит, и elastic не видит падения и не снимает пиров (тихий вис).
-            # Жёсткий выход гарантирует смерть ранка → лаунчер тут же снимает пиров;
-            # DataLoader-воркеры добьёт PDEATHSIG (см. ddp.set_pdeathsig).
+            # Чистый destroy_process_group() может зависнуть на NCCL-teardown, пока в
+            # группе висит недоделанный коллектив (упавший ранг не выходит → тихий вис).
+            # Жёсткий выход → лаунчер снимает пиров, DataLoader-воркеров добьёт PDEATHSIG.
             sys.stderr.flush()
             os._exit(1)
         raise
@@ -216,7 +221,12 @@ def _train(cfg: DictConfig):
 
 def main():
     add_cwd_to_sys_path()
-    trainer_app()
+    try:
+        trainer_app()
+    except KeyboardInterrupt:
+        # Прерывание на этапе сетапа (до trainer.train()) — тоже чисто, без traceback.
+        print('\n--> Interrupted by user (Ctrl-C).', file=sys.stderr)
+        sys.exit(130)
 
 
 if __name__ == "__main__":
