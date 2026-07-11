@@ -12,9 +12,10 @@
 игнорируются (no-op) — Hydra больше нет. В отличие от Hydra нет strict/struct-режима:
 ``key=value`` спокойно добавляет новый ключ (без обязательного ``+``).
 """
+import copy
 import os
 
-from omegaconf import OmegaConf, open_dict
+from omegaconf import DictConfig, OmegaConf, open_dict
 
 
 def _parse_value(raw: str):
@@ -49,21 +50,87 @@ def apply_overrides(cfg, overrides):
     return cfg
 
 
+def _resolve_path(config_name: str, config_dir: str) -> str:
+    path = config_name if os.path.isabs(config_name) else os.path.join(config_dir, config_name)
+    if not path.endswith((".yaml", ".yml")):
+        path += ".yaml"
+    return path
+
+
+def _apply_default_entry(entry, config_dir, result, own, seen):
+    """Обработать один элемент списка ``defaults``; вернуть (новый result, был_ли _self_).
+
+    Формы:
+      * ``_self_``            — подмешать собственное содержимое файла;
+      * ``name`` / ``a/b``    — базовый конфиг (мёрдж в КОРЕНЬ, рекурсивно);
+      * ``{group: option}``   — config-group: ``group/option.yaml`` под ключ ``group``
+                                (вложенные ``a/b: opt`` → под ``a.b``), дефолтная
+                                упаковка Hydra.
+    """
+    if entry == "_self_":
+        return OmegaConf.merge(result, own), True
+    if isinstance(entry, str):
+        base = _load_with_defaults(entry, config_dir, seen)
+        return OmegaConf.merge(result, base), False
+    if isinstance(entry, (dict, DictConfig)):
+        for group, option in entry.items():
+            if option is None:  # '- group: null' — пропуск (без опции)
+                continue
+            sub = _load_with_defaults(f"{group}/{option}", config_dir, seen)
+            container = OmegaConf.create({})
+            OmegaConf.update(container, str(group).replace("/", "."), sub, force_add=True)
+            result = OmegaConf.merge(result, container)
+        return result, False
+    raise ValueError(f"unsupported 'defaults' entry {entry!r}")
+
+
+def _load_with_defaults(config_name: str, config_dir: str, _seen=None):
+    """Загрузить YAML и, если есть Hydra-подобный ``defaults:``, скомпоновать конфиги.
+
+    Слияние идёт СЛЕВА-НАПРАВО (следующий переопределяет предыдущего); ``_self_`` —
+    место, где подмешивается собственное содержимое файла (если его нет в списке —
+    неявно последним, как в Hydra). Поддержаны имена базовых конфигов (в т.ч. с
+    подкаталогом) и config-groups ``{group: option}``; ``@package``-пути и
+    ``override``/``optional`` в defaults не поддерживаются."""
+    _seen = _seen or set()
+    path = _resolve_path(config_name, config_dir)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"config not found: {path}")
+    if path in _seen:
+        raise ValueError(f"circular 'defaults' composition at {path}")
+    _seen = _seen | {path}
+
+    raw = OmegaConf.load(path)
+    defaults = raw.get("defaults", None) if isinstance(raw, DictConfig) else None
+
+    own = copy.deepcopy(raw)  # собственное содержимое файла (без defaults/hydra)
+    with open_dict(own):
+        own.pop("defaults", None)
+        own.pop("hydra", None)
+
+    if not defaults:
+        return own
+
+    result = OmegaConf.create({})
+    self_included = False
+    for entry in defaults:
+        result, was_self = _apply_default_entry(entry, config_dir, result, own, _seen)
+        self_included = self_included or was_self
+    if not self_included:  # Hydra неявно ставит _self_ последним
+        result = OmegaConf.merge(result, own)
+    return result
+
+
 def load_config(config_name: str, config_dir: str = ".", overrides=()):
-    """Загрузить YAML через OmegaConf, отбросить Hydra-only секции и применить оверрайды.
+    """Загрузить конфиг (с композицией ``defaults:``), отбросить ``hydra:`` и применить
+    оверрайды.
 
     ``config_name`` — имя файла (с .yaml или без) либо абсолютный путь. ``config_dir`` —
     каталог поиска (по умолчанию текущий), как ``--config-dir`` у Hydra.
     """
-    path = config_name if os.path.isabs(config_name) else os.path.join(config_dir, config_name)
-    if not path.endswith((".yaml", ".yml")):
-        path += ".yaml"
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"config not found: {path}")
-    cfg = OmegaConf.load(path)
-    for k in ("hydra", "defaults"):  # секции Hydra (композиция/оутпут-дир) движку не нужны
-        if k in cfg:
-            with open_dict(cfg):
-                del cfg[k]
+    cfg = _load_with_defaults(config_name, config_dir)
+    if isinstance(cfg, DictConfig) and "hydra" in cfg:
+        with open_dict(cfg):
+            del cfg["hydra"]
     apply_overrides(cfg, overrides)
     return cfg

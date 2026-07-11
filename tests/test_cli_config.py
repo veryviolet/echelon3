@@ -1,8 +1,9 @@
 """CLI-оверрайды на OmegaConf (замена Hydra): key=/+/++/~, типизация, вложенность,
 игнор hydra.*. GPU/обучение не нужны."""
+import pytest
 from omegaconf import OmegaConf
 
-from echelon3.cli.config import apply_overrides, _parse_value
+from echelon3.cli.config import apply_overrides, _parse_value, load_config
 
 
 def _c(d):
@@ -58,3 +59,64 @@ def test_env_interpolation_preserved():
     apply_overrides(cfg, ["p=${oc.env:MY_ROOT,/def}"])
     # интерполяция сохраняется как есть, резолвится позже (to_container(resolve=True))
     assert OmegaConf.to_container(cfg, resolve=True)["p"] == "/def"
+
+
+# ---- defaults: композиция ----------------------------------------------
+def test_defaults_base_inheritance(tmp_path):
+    (tmp_path / "base.yaml").write_text("a: 1\nb:\n  x: 10\nkeep: base\n")
+    (tmp_path / "child.yaml").write_text(
+        "defaults:\n  - base\n  - _self_\nb:\n  x: 20\n  y: 30\nkeep: child\n")
+    cfg = load_config("child", str(tmp_path))
+    assert cfg.a == 1            # унаследовано из base
+    assert cfg.b.x == 20         # child переопределяет
+    assert cfg.b.y == 30         # child добавляет
+    assert cfg.keep == "child"   # _self_ последним → child выигрывает
+
+
+def test_defaults_self_first_base_last_wins(tmp_path):
+    (tmp_path / "base.yaml").write_text("k: base\n")
+    (tmp_path / "child.yaml").write_text("defaults:\n  - _self_\n  - base\nk: child\n")
+    assert load_config("child", str(tmp_path)).k == "base"  # base после _self_
+
+
+def test_defaults_implicit_self_last(tmp_path):
+    (tmp_path / "base.yaml").write_text("k: base\nonly_base: 1\n")
+    (tmp_path / "child.yaml").write_text("defaults:\n  - base\nk: child\n")
+    cfg = load_config("child", str(tmp_path))
+    assert cfg.k == "child" and cfg.only_base == 1  # _self_ неявно последним
+
+
+def test_defaults_config_group_under_key(tmp_path):
+    (tmp_path / "net").mkdir()
+    (tmp_path / "net" / "resnet.yaml").write_text("module: m\ntype: ResNet\nconfig:\n  depth: 18\n")
+    (tmp_path / "cfg.yaml").write_text("defaults:\n  - net: resnet\n  - _self_\nlr: 0.1\n")
+    cfg = load_config("cfg", str(tmp_path))
+    assert cfg.net.type == "ResNet" and cfg.net.config.depth == 18 and cfg.lr == 0.1
+
+
+def test_defaults_nested_config_group(tmp_path):
+    (tmp_path / "data" / "aug").mkdir(parents=True)
+    (tmp_path / "data" / "aug" / "heavy.yaml").write_text("p: 0.9\n")
+    (tmp_path / "cfg.yaml").write_text("defaults:\n  - data/aug: heavy\n")
+    assert load_config("cfg", str(tmp_path)).data.aug.p == 0.9  # под data.aug
+
+
+def test_defaults_recursive_base(tmp_path):
+    (tmp_path / "root.yaml").write_text("a: 1\n")
+    (tmp_path / "mid.yaml").write_text("defaults:\n  - root\n  - _self_\nb: 2\n")
+    (tmp_path / "leaf.yaml").write_text("defaults:\n  - mid\n  - _self_\nc: 3\n")
+    cfg = load_config("leaf", str(tmp_path))
+    assert cfg.a == 1 and cfg.b == 2 and cfg.c == 3  # транзитивно
+
+
+def test_defaults_cycle_detected(tmp_path):
+    (tmp_path / "x.yaml").write_text("defaults:\n  - y\n")
+    (tmp_path / "y.yaml").write_text("defaults:\n  - x\n")
+    with pytest.raises(ValueError):
+        load_config("x", str(tmp_path))
+
+
+def test_defaults_bad_entry_raises(tmp_path):
+    (tmp_path / "cfg.yaml").write_text("defaults:\n  - [1, 2]\n")
+    with pytest.raises(ValueError):
+        load_config("cfg", str(tmp_path))
