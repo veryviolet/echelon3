@@ -1003,6 +1003,15 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
+<h2 id="082-2026-07-12">0.8.2 — 2026-07-12<a class="headerlink" href="#082-2026-07-12" title="Permanent link">&para;</a></h2>
+<h3 id="packaging">Packaging<a class="headerlink" href="#packaging" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>CHANGELOG.md</code> now ships inside the package</strong> — <code>echelon3/CHANGELOG.md</code> in the wheel
+  (so it lands in <code>site-packages</code>) and in the sdist — and a <strong><code>Changelog</code></strong> project URL
+  is exposed in the metadata (shown by <code>pip show echelon3</code> and on PyPI). Previously the
+  changelog lived only in the repo, so tools inspecting the installed package couldn't
+  find it.</li>
+</ul>
 <h2 id="081-2026-07-12">0.8.1 — 2026-07-12<a class="headerlink" href="#081-2026-07-12" title="Permanent link">&para;</a></h2>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
