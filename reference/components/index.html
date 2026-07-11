@@ -1583,6 +1583,7 @@ the notable arguments — see the source for the full signature.</p>
 <p>A few components need extra dependencies:
 <code>pip install echelon3[sam]</code> (SAM optimizer, MosaicML),
 <code>echelon3[smp]</code> (Lovász loss and the PSP neck, segmentation-models-pytorch),
+<code>echelon3[detection]</code> (mAP COCO backend, faster-coco-eval),
 <code>echelon3[export]</code> (ONNX export). Install with the bracketed extra to use them.</p>
 </div>
 <h2 id="datasets-module-echelon3data">Datasets — <code>module: echelon3.data.*</code><a class="headerlink" href="#datasets-module-echelon3data" title="Permanent link">&para;</a></h2>
@@ -1965,7 +1966,7 @@ the stock albumentations catalog). <code>ToTensorV2</code> is appended automatic
 <tr>
 <td><code>echelon3.metrics.detection</code></td>
 <td><code>mAP</code></td>
-<td>Mean average precision (wraps torchmetrics <code>MeanAveragePrecision</code>).</td>
+<td>Mean average precision (wraps torchmetrics <code>MeanAveragePrecision</code>); needs <code>echelon3[detection]</code>.</td>
 </tr>
 <tr>
 <td><code>echelon3.metrics.multibinary</code></td>
@@ -2119,7 +2120,7 @@ the stock albumentations catalog). <code>ToTensorV2</code> is appended automatic
 <tr>
 <td><code>echelon3.trainers.baseline</code></td>
 <td><code>Trainer</code></td>
-<td>The default loop: train/validate/keep-best/checkpoint, DDP- and DataParallel-aware.</td>
+<td>The default loop: train/validate/keep-best/checkpoint, DDP-aware.</td>
 </tr>
 <tr>
 <td><code>echelon3.trainers.multihead</code></td>
@@ -2295,8 +2296,7 @@ closure automatically.</p>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../config-schema/">Config Schema</a> — how these fit into each section.</li>
-<li><a href="../../guide/extending/">Extending</a> — add your own classes the same way.
-</content></li>
+<li><a href="../../guide/extending/">Extending</a> — add your own classes the same way.</li>
 </ul>
 
 

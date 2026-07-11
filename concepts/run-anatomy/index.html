@@ -1251,8 +1251,10 @@ improve together. The checkpoint manager keeps the most recent
 </code></pre></div>
 <h2 id="multi-gpu-and-logging">Multi-GPU and logging<a class="headerlink" href="#multi-gpu-and-logging" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Under <code>torchrun</code>, the network is wrapped in <code>DistributedDataParallel</code>; without
-  it, in <code>DataParallel</code>. See <a href="../../guide/ddp/">Multi-GPU (DDP)</a>.</li>
+<li>Multiple GPUs run as <code>DistributedDataParallel</code> — one process per GPU, spawned by
+  echelon3's built-in launcher (<code>gpus=[...]</code>) or by <code>torchrun</code>; a single GPU / CPU
+  runs in-process. (DataParallel was removed in 0.5.0.) See
+  <a href="../../guide/ddp/">Multi-GPU (DDP)</a>.</li>
 <li>Logging and checkpoint writing happen on rank 0 only. Non-main ranks get a
   no-op logger, so nothing is double-written.</li>
 </ul>

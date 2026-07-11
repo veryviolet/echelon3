@@ -917,10 +917,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#device-device_ids" class="md-nav__link">
+  <a href="#device-gpus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        device / device_ids
+        device / gpus
       
     </span>
   </a>
@@ -1268,10 +1268,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#device-device_ids" class="md-nav__link">
+  <a href="#device-gpus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        device / device_ids
+        device / gpus
       
     </span>
   </a>
@@ -1527,9 +1527,9 @@ does not validate them itself; the constructor does.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>device</code> / <code>device_ids</code></td>
+<td><code>device</code> / <code>gpus</code></td>
 <td><code>cli.train</code></td>
-<td>Target device and <code>DataParallel</code> GPU ids</td>
+<td>Target device (<code>cuda</code>/<code>cpu</code>) and GPU selection (multi → DDP)</td>
 </tr>
 <tr>
 <td><code>net</code></td>
@@ -1613,12 +1613,14 @@ does not validate them itself; the constructor does.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="device-device_ids"><code>device</code> / <code>device_ids</code><a class="headerlink" href="#device-device_ids" title="Permanent link">&para;</a></h2>
-<p>Plain scalars, not triples. <code>device</code> defaults to <code>cuda</code> (falls back to <code>cpu</code>
-when CUDA is unavailable). <code>device_ids</code> is a list of GPU indices passed to
-<code>torch.nn.DataParallel</code>.</p>
+<h2 id="device-gpus"><code>device</code> / <code>gpus</code><a class="headerlink" href="#device-gpus" title="Permanent link">&para;</a></h2>
+<p>Plain scalars/lists, not triples. <code>device</code> defaults to <code>cuda</code> (falls back to <code>cpu</code>
+when CUDA is unavailable); <code>device: cpu</code> forces CPU. <code>gpus</code> is a list of GPU indices:
+more than one spawns DDP (one process per GPU), a single index pins the run to that
+physical GPU, and omitting it uses every visible GPU. (<code>device_ids</code> is legacy and
+ignored — DataParallel was removed in 0.5.0.)</p>
 <div class="highlight"><pre><span></span><code><span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cuda</span>
-<span class="nt">device_ids</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">]</span>
+<span class="nt">gpus</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">]</span>
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Ignored under DDP</p>
@@ -1969,7 +1971,6 @@ under that entry point. See <a href="../../guide/extending/">Extending</a> for t
 <p>This is <code>examples/configs/smoke.yaml</code> — a full classifier run with an export
 section, runnable end to end (see <a href="../../getting-started/first-run/">First Run</a>):</p>
 <div class="highlight"><pre><span></span><code><span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cuda</span>
-<span class="nt">device_ids</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">]</span>
 
 <span class="nt">net</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.nets.classifier</span>
@@ -2071,9 +2072,7 @@ section, runnable end to end (see <a href="../../getting-started/first-run/">Fir
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../components/">Built-in Components</a> — the catalog of <code>module</code>/<code>type</code> values.</li>
-<li><a href="../../guide/extending/">Extending</a> — plug in your own classes.
-</content>
-</invoke></li>
+<li><a href="../../guide/extending/">Extending</a> — plug in your own classes.</li>
 </ul>
 
 

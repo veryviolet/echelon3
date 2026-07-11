@@ -1270,8 +1270,8 @@ directly.</p>
 <div class="highlight"><pre><span></span><code>echelon3<span class="w"> </span><span class="nb">export</span><span class="w"> </span>--config-dir<span class="w"> </span>configs<span class="w"> </span>--config-name<span class="w"> </span>my_experiment
 </code></pre></div>
 <p>The exporter builds the network from <code>net</code>, and — if a <code>target</code> section is
-present — loads the latest checkpoint from <code>target.path</code> (falling back to a
-<code>DataParallel</code>-style load for <code>module.</code>-prefixed keys). It then runs every
+present — loads the latest checkpoint from <code>target.path</code> (a legacy <code>module.</code> prefix from
+DDP checkpoints is stripped automatically). It then runs every
 exporter under <code>export.exporters</code> in turn. With no <code>target</code>, it exports the
 freshly-initialized network (useful for shape/graph checks).</p>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
@@ -1327,8 +1327,7 @@ or <code>ToBinarySegmentationMask</code> make good postprocess steps.</p>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../reference/config-schema/">Config Schema</a> — the <code>export</code> section in context.</li>
-<li><a href="../../reference/components/">Built-in Components</a> — preprocess/postprocess modules.
-</content></li>
+<li><a href="../../reference/components/">Built-in Components</a> — preprocess/postprocess modules.</li>
 </ul>
 
 

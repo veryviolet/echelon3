@@ -1099,8 +1099,9 @@
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>echelon3
 </code></pre></div>
 <p>This pulls in the core dependencies (torch, torchvision, timm, torchmetrics,
-albumentations, click, opencv-python, tensorboard, and friends) and installs
-five console scripts on your <code>PATH</code>:</p>
+albumentations, click, opencv-python, tensorboard, and friends) and installs the
+<code>echelon3</code> command with five subcommands (the per-command <code>echelon3-train</code>, … scripts
+are kept as legacy aliases):</p>
 <table>
 <thead>
 <tr>
@@ -1133,9 +1134,10 @@ five console scripts on your <code>PATH</code>:</p>
 </table>
 <h2 id="optional-extras">Optional extras<a class="headerlink" href="#optional-extras" title="Permanent link">&para;</a></h2>
 <p>Some functionality lives behind extras so the base install stays lean:</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[export]&quot;</span><span class="w">   </span><span class="c1"># ONNX export (onnx, onnxruntime)</span>
-pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[sam]&quot;</span><span class="w">      </span><span class="c1"># SAMOptimizer (mosaicml)</span>
-pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[smp]&quot;</span><span class="w">      </span><span class="c1"># segmentation-models-pytorch losses/necks</span>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[export]&quot;</span><span class="w">     </span><span class="c1"># ONNX export (onnx, onnxruntime)</span>
+pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[detection]&quot;</span><span class="w">  </span><span class="c1"># mAP COCO eval backend (faster-coco-eval)</span>
+pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[sam]&quot;</span><span class="w">        </span><span class="c1"># SAMOptimizer (mosaicml)</span>
+pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;echelon3[smp]&quot;</span><span class="w">        </span><span class="c1"># segmentation-models-pytorch losses/necks</span>
 </code></pre></div>
 <p>The corresponding modules import lazily: importing <code>echelon3</code> never fails because
 an extra is missing — you only hit an <code>ImportError</code> (with a hint) if you actually
