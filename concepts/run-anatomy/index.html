@@ -1233,9 +1233,10 @@ per set as <code>{set_name}/{metric}</code>.</p>
 <li>or a mapping with per-metric modes — <code>directional</code> (<code>value: high|low</code>) or
   <code>tolerance</code> (only counts as improvement if it moves past a threshold).</li>
 </ul>
-<p>When several metrics are tracked, a checkpoint is saved only when <strong>all</strong> of them
-improve together. The checkpoint manager keeps the most recent
-<code>target.checkpoints_to_keep</code> files.</p>
+<p>When several metrics are tracked they are combined with <strong>AND</strong> — there is no OR,
+weighted, or priority mode: a checkpoint is saved only on a validation where <strong>all</strong>
+of them improve together, so multi-metric saves are rare. The checkpoint manager keeps
+the most recent <code>target.checkpoints_to_keep</code> files.</p>
 <h2 id="a-minimal-trainer-section">A minimal <code>trainer</code> section<a class="headerlink" href="#a-minimal-trainer-section" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nt">trainer</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.trainers.baseline</span>

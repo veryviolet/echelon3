@@ -1886,9 +1886,11 @@ mapping:</p>
 <span class="w">      </span><span class="nt">accuracy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">incidents</span>
 <span class="w">      </span><span class="nt">accuracy_control</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">control</span>
 </code></pre></div>
-<p>A checkpoint is saved only when <strong>all</strong> listed metrics satisfy their condition
-simultaneously. For dict-shaped (multi-head) predictions, use
-<code>echelon3.trainers.multihead.MultiHeadTrainer</code> instead.</p>
+<p><strong>Multiple metrics are always combined with AND.</strong> A new best checkpoint is saved
+only on a validation where <strong>every</strong> listed metric satisfies its condition at the same
+time — there is no OR, weighted, or priority mode. With several metrics this makes
+saves rare (all of them must improve together on the same validation). For dict-shaped
+(multi-head) predictions, use <code>echelon3.trainers.multihead.MultiHeadTrainer</code> instead.</p>
 <h2 id="target"><code>target</code><a class="headerlink" href="#target" title="Permanent link">&para;</a></h2>
 <p>Passed verbatim to <code>CheckpointManager(**config)</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">target</span><span class="p">:</span>
