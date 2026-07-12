@@ -4,6 +4,22 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.6 — 2026-07-12
+
+### Changed
+
+- **Reworked the training / validation console output into clean per-cycle summary
+  lines.** The live `tqdm` bars (`Training epoch N …`, `Evaluating [name] …`) are now
+  transient (`leave=False`); when each closes it is replaced by one past-tense summary
+  line instead of a leftover bar:
+  - `--> Trained epoch N: 25% (256/1000), lr=3.00e-04, loss1=…, loss2=…` — how far the
+    epoch had progressed at this validation point, the current LR, and the latest losses;
+  - `--> Evaluated [name]: loss1=…, metric1=…` — one line per test loader.
+  Numbers use an adaptive format (trailing zeros trimmed, scientific for very small /
+  large values), so metric values no longer print as `tensor(0.0161, device='cuda:0')` —
+  which used to overflow the terminal and leave garbled, half-overwritten lines. The
+  keep-best "Saving checkpoint" lines round the same way.
+
 ## 0.8.5 — 2026-07-12
 
 ### Fixed

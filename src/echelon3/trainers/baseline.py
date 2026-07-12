@@ -28,20 +28,25 @@ from echelon3 import warncollect
 
 
 def _fmt_metric(v) -> str:
-    """Скаляр-метрику → короткий float для однострочного вывода.
+    """Метрику/лосс → компактное число для однострочного вывода.
 
-    Без этого в консоль попадает repr тензора (``tensor(0.0161, device='cuda:0')``):
-    строка постфикса раздувается, переполняет ширину терминала, tqdm переносит её
-    и `\\r` уже не стирает предыдущую физическую строку — остаются обрывки бара."""
+    Адаптивно: обычные значения — до 4 знаков без хвостовых нулей (``0.0161``,
+    ``222.344``), очень мелкие/крупные — научная запись (``8.070e-05``, ``5.400e+06``).
+    Без этого в консоль попадал repr тензора (``tensor(0.0161, device='cuda:0')``):
+    строка раздувалась, переполняла терминал и tqdm оставлял обрывки бара."""
     if isinstance(v, torch.Tensor):
         v = v.detach()
         if v.numel() != 1:
             return str(v.cpu().tolist())
         v = v.item()
     try:
-        return f"{float(v):.4f}"
+        f = float(v)
     except (TypeError, ValueError):
         return str(v)
+    a = abs(f)
+    if a != 0.0 and (a < 1e-4 or a >= 1e6):
+        return f"{f:.3e}"
+    return f"{f:.4f}".rstrip("0").rstrip(".") or "0"
 
 
 class _NullLogger:
@@ -401,8 +406,10 @@ class Trainer:
             desc=f"--> Training epoch {self._current_epoch}",
             ncols=0,
             dynamic_ncols=True,
+            leave=False,   # живой бар стираем; итог — строкой «Trained …» ниже
             disable=not ddp.is_main(),
         )
+        self._last_trained_batch = -1   # антидубль строки «Trained …» за эпоху
 
         self.prepare_network_for_train()
         self.recalculate_start_of_epoch_global_step()
@@ -432,6 +439,7 @@ class Trainer:
             ):
 
                 train_progress.close()
+                self._log_trained(batch + 1, total_batches)
 
                 self.prepare_network_for_validation()
                 self.validate_and_check_for_saving()
@@ -448,12 +456,31 @@ class Trainer:
                         desc=f"--> Training epoch {self._current_epoch}",
                         ncols=0,
                         dynamic_ncols=True,
+                        leave=False,
                         disable=not ddp.is_main(),
                     )
 
         train_progress.close()
+        self._log_trained(total_batches, total_batches)
         if self._scheduler is not None:
             self._scheduler.step()
+
+    def _log_trained(self, batches_done: int, total_batches: int):
+        """Итоговая строка на каждый закрытый train-бар (он leave=False, стёрся):
+        докуда дошли в эпохе, текущий lr и последние лоссы. Печатаем один раз на
+        достигнутый батч (антидубль — конец эпохи мог совпасть с валидацией)."""
+        if not ddp.is_main() or batches_done == self._last_trained_batch:
+            return
+        self._last_trained_batch = batches_done
+        pct = int(round(100.0 * batches_done / max(1, total_batches)))
+        lr = self._optimizer.param_groups[0]["lr"]
+        parts = [f"lr={lr:.2e}"]
+        if self.losses_without_weights:
+            parts += [f"{k}={_fmt_metric(v)}" for k, v in self.losses_without_weights.items()]
+        tqdm.write(
+            f"--> Trained epoch {self._current_epoch}: {pct}% "
+            f"({batches_done}/{total_batches}), " + ", ".join(parts)
+        )
 
     # =========================
     #   ЛОГИКА KEEP_BEST_ON
@@ -593,7 +620,7 @@ class Trainer:
             print(Fore.LIGHTGREEN_EX, end="")
             if self._current_metrics_all:
                 metrics_str = ", ".join(
-                    f"{k}={v}" for k, v in self._current_metrics_all.items()
+                    f"{k}={_fmt_metric(v)}" for k, v in self._current_metrics_all.items()
                 )
                 print(
                     f"--> Initial metrics baseline for [{metrics_str}]. Saving checkpoint."
@@ -616,7 +643,7 @@ class Trainer:
             print(Fore.LIGHTGREEN_EX, end="")
             if self._current_metrics_all:
                 metrics_str = ", ".join(
-                    f"{k}={v}" for k, v in self._current_metrics_all.items()
+                    f"{k}={_fmt_metric(v)}" for k, v in self._current_metrics_all.items()
                 )
                 print(
                     f"--> Obtained better values for [{metrics_str}]. Saving checkpoint."
@@ -738,7 +765,7 @@ class Trainer:
                     desc=f"--> Evaluating [{loader_name}]",
                     ncols=0,
                     dynamic_ncols=True,
-                    leave=False,   # бар стираем; итог печатаем одной строкой ниже
+                    leave=False,   # живой бар стираем; итог — строкой «Evaluated …»
                     disable=not ddp.is_main(),
                 )
 
@@ -794,14 +821,14 @@ class Trainer:
                 loss_metrics_values = {k: m.compute() for k, m in loss_metrics.items()}
                 metrics_values = {k: m.compute() for k, m in metrics_for_loader.items()}
 
-                # Бар выше стёрся (leave=False); печатаем ОДНУ итоговую строку на
-                # лоадер — короткими float, чтобы она не переполняла терминал и не
-                # оставляла обрывков перед тренировкой следующей эпохи.
+                # Живой бар (leave=False) стёрся; печатаем одну итоговую строку —
+                # прошедшее время «Evaluated», лоссы+метрики компактными числами
+                # (не tensor(..., device='cuda:0'), иначе строка переполняет терминал).
                 train_progress.close()
                 if ddp.is_main():
                     summary = {**loss_metrics_values, **metrics_values}
-                    parts = "  ".join(f"{k}={_fmt_metric(v)}" for k, v in summary.items())
-                    tqdm.write(f"--> [{loader_name}] {parts}")
+                    parts = ", ".join(f"{k}={_fmt_metric(v)}" for k, v in summary.items())
+                    tqdm.write(f"--> Evaluated [{loader_name}]: {parts}")
 
                 prefixed_losses = {f"{loader_name}/{k}": v for k, v in loss_metrics_values.items()}
                 prefixed_metrics = {f"{loader_name}/{k}": v for k, v in metrics_values.items()}
