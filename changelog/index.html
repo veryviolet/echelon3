@@ -1003,8 +1003,15 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
-<h2 id="083-2026-07-12">0.8.3 — 2026-07-12<a class="headerlink" href="#083-2026-07-12" title="Permanent link">&para;</a></h2>
+<h2 id="084-2026-07-12">0.8.4 — 2026-07-12<a class="headerlink" href="#084-2026-07-12" title="Permanent link">&para;</a></h2>
 <h3 id="docs">Docs<a class="headerlink" href="#docs" title="Permanent link">&para;</a></h3>
+<ul>
+<li>README (PyPI front page): added a "Use it from your AI coding agent" section
+  pointing at the <code>echelon3-agent-skills</code> repo, with the one-line marketplace-install
+  commands for Codex and Claude Code.</li>
+</ul>
+<h2 id="083-2026-07-12">0.8.3 — 2026-07-12<a class="headerlink" href="#083-2026-07-12" title="Permanent link">&para;</a></h2>
+<h3 id="docs_1">Docs<a class="headerlink" href="#docs_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Rewrote the README</strong> (the PyPI front page) — clear value prop, a complete copy-and-run
   config + command, a "what you get" list, and the CLI/overrides — and swept the docs,
@@ -1150,7 +1157,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   now delegates to <code>nn.Module.to()</code> when the metric is a module; pure non-module
   metrics stay a no-op as before.</li>
 </ul>
-<h3 id="docs_1">Docs<a class="headerlink" href="#docs_1" title="Permanent link">&para;</a></h3>
+<h3 id="docs_2">Docs<a class="headerlink" href="#docs_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li>DDP guide: corrected the validation section — only torchmetrics reduce their state
   across ranks; custom <code>Metric</code> subclasses compute per-shard, so keep-best is driven
