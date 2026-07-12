@@ -4,6 +4,20 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.5 — 2026-07-12
+
+### Fixed
+
+- **Validation output no longer leaves garbled "Evaluating [...]" lines.** Metric
+  values were pushed into the tqdm postfix as raw `tensor(0.0161, device='cuda:0')`;
+  the line overflowed the terminal width, so tqdm's `\r` could not clear it and each
+  evaluated test loader left two or three half-overwritten lines before the next
+  epoch. The per-loader eval bar is now `leave=False` (cleared on completion) and the
+  result prints as one tidy line per test set with plain floats, e.g.
+  `--> [test_geoloc3] l1=0.9636  mse=1.4694`.
+- Warning summary (`warncollect`) no longer cuts a message mid-word — over-long
+  messages are trimmed with an ellipsis.
+
 ## 0.8.4 — 2026-07-12
 
 ### Docs

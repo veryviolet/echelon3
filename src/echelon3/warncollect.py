@@ -25,7 +25,8 @@ def install():
 
     def _collect(message, category, filename, lineno, file=None, line=None):
         name = getattr(category, "__name__", str(category))
-        text = str(message).splitlines()[0][:120] if str(message) else ""
+        first = str(message).splitlines()[0] if str(message) else ""
+        text = (first[:117] + "…") if len(first) > 120 else first
         _counts[f"{name}: {text}"] += 1
 
     warnings.showwarning = _collect

@@ -27,6 +27,23 @@ from echelon3 import runtime
 from echelon3 import warncollect
 
 
+def _fmt_metric(v) -> str:
+    """Скаляр-метрику → короткий float для однострочного вывода.
+
+    Без этого в консоль попадает repr тензора (``tensor(0.0161, device='cuda:0')``):
+    строка постфикса раздувается, переполняет ширину терминала, tqdm переносит её
+    и `\\r` уже не стирает предыдущую физическую строку — остаются обрывки бара."""
+    if isinstance(v, torch.Tensor):
+        v = v.detach()
+        if v.numel() != 1:
+            return str(v.cpu().tolist())
+        v = v.item()
+    try:
+        return f"{float(v):.4f}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
 class _NullLogger:
     """Заглушка mlops-логгера для не-главных DDP-ранков."""
 
@@ -721,6 +738,7 @@ class Trainer:
                     desc=f"--> Evaluating [{loader_name}]",
                     ncols=0,
                     dynamic_ncols=True,
+                    leave=False,   # бар стираем; итог печатаем одной строкой ниже
                     disable=not ddp.is_main(),
                 )
 
@@ -776,8 +794,14 @@ class Trainer:
                 loss_metrics_values = {k: m.compute() for k, m in loss_metrics.items()}
                 metrics_values = {k: m.compute() for k, m in metrics_for_loader.items()}
 
-                train_progress.set_postfix({**loss_metrics_values, **metrics_values})
+                # Бар выше стёрся (leave=False); печатаем ОДНУ итоговую строку на
+                # лоадер — короткими float, чтобы она не переполняла терминал и не
+                # оставляла обрывков перед тренировкой следующей эпохи.
                 train_progress.close()
+                if ddp.is_main():
+                    summary = {**loss_metrics_values, **metrics_values}
+                    parts = "  ".join(f"{k}={_fmt_metric(v)}" for k, v in summary.items())
+                    tqdm.write(f"--> [{loader_name}] {parts}")
 
                 prefixed_losses = {f"{loader_name}/{k}": v for k, v in loss_metrics_values.items()}
                 prefixed_metrics = {f"{loader_name}/{k}": v for k, v in metrics_values.items()}
