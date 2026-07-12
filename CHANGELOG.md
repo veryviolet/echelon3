@@ -4,6 +4,14 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.4 — 2026-07-12
+
+### Docs
+
+- README (PyPI front page): added a "Use it from your AI coding agent" section
+  pointing at the `echelon3-agent-skills` repo, with the one-line marketplace-install
+  commands for Codex and Claude Code.
+
 ## 0.8.3 — 2026-07-12
 
 ### Docs

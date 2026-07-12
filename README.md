@@ -81,4 +81,23 @@ python gen_seg_data.py --root ./seg_data
 SEG_DATA=./seg_data echelon3 train -cd . -cn segmentation_smoke device=cpu
 ```
 
-**Full documentation: <https://veryviolet.github.io/echelon3/>**
+## Use it from your AI coding agent
+
+Marketplace-installable plugins teach **Codex** and **Claude Code** the echelon3
+config format and CLI, so the agent writes correct configs and runs them for you —
+repo: <https://github.com/veryviolet/echelon3-agent-skills>.
+
+```bash
+# Codex
+codex plugin marketplace add veryviolet/echelon3-agent-skills
+codex plugin add echelon3@veryviolet
+```
+```text
+# Claude Code (run inside the REPL)
+/plugin marketplace add veryviolet/echelon3-agent-skills
+/plugin install echelon3@veryviolet
+```
+
+## Full documentation
+
+**<https://veryviolet.github.io/echelon3/>**
