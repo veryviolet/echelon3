@@ -328,9 +328,11 @@ trainer:
       accuracy_control: control
 ```
 
-A checkpoint is saved only when **all** listed metrics satisfy their condition
-simultaneously. For dict-shaped (multi-head) predictions, use
-`echelon3.trainers.multihead.MultiHeadTrainer` instead.
+**Multiple metrics are always combined with AND.** A new best checkpoint is saved
+only on a validation where **every** listed metric satisfies its condition at the same
+time — there is no OR, weighted, or priority mode. With several metrics this makes
+saves rare (all of them must improve together on the same validation). For dict-shaped
+(multi-head) predictions, use `echelon3.trainers.multihead.MultiHeadTrainer` instead.
 
 ## `target`
 

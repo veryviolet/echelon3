@@ -57,9 +57,10 @@ Checkpoints are saved based on `keep_best_on`. It can be:
 - or a mapping with per-metric modes — `directional` (`value: high|low`) or
   `tolerance` (only counts as improvement if it moves past a threshold).
 
-When several metrics are tracked, a checkpoint is saved only when **all** of them
-improve together. The checkpoint manager keeps the most recent
-`target.checkpoints_to_keep` files.
+When several metrics are tracked they are combined with **AND** — there is no OR,
+weighted, or priority mode: a checkpoint is saved only on a validation where **all**
+of them improve together, so multi-metric saves are rare. The checkpoint manager keeps
+the most recent `target.checkpoints_to_keep` files.
 
 ## A minimal `trainer` section
 
