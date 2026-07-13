@@ -257,17 +257,15 @@ class Trainer:
             print(f" Loaded checkpoint {num_loaded}")
             self.recalculate_start_of_epoch_global_step()
             self.initialize_network()
-            # Валидация загруженного чекпойнта
-            self.validate()
 
-            if (
-                self._keep_best_config is not None
-                and len(self._keep_best_config) > 0
-                and self._current_metrics_all is not None
-                and self._best_metrics_all is None
-            ):
-                self._best_metrics_all = dict(self._current_metrics_all)
-                self._best_metric_to_track = self._metric_to_track
+        # Начальная валидация ДО обучения — одинаково для scratch и для чекпойнта:
+        # это initial baseline (метрики на шаге 0 / загруженного чекпойнта), а НЕ
+        # замер после куска первой эпохи. validate_and_check_for_saving() сам зовёт
+        # validate(), печатает «Initial metrics baseline …» (best ещё None) и
+        # сохраняет baseline-чекпойнт, который дальнейшее обучение должно побить.
+        self.prepare_network_for_validation()
+        self.validate_and_check_for_saving()
+        self.prepare_network_for_train()
 
         while self._current_epoch <= self._epochs:
             self.train_epoch()

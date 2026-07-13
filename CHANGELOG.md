@@ -4,6 +4,19 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.8.7 — 2026-07-13
+
+### Fixed
+
+- **Initial validation now runs BEFORE training, for both fresh and resumed runs.**
+  Previously a from-scratch run went straight into `train_epoch()` and the first
+  validation (the one printed as `Initial metrics baseline`) only happened partway
+  through the first epoch — so the "baseline" was measured *after* some training. The
+  initial `validate_and_check_for_saving()` is now called once before the epoch loop for
+  both paths (scratch and checkpoint), so the baseline is the step-0 / loaded-checkpoint
+  state, and training must beat it. (Side effects: a fresh run now saves an initial
+  checkpoint at step 0; a resumed run prints `Initial metrics baseline` and re-saves it.)
+
 ## 0.8.6 — 2026-07-12
 
 ### Changed
