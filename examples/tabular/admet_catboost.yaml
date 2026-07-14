@@ -1,0 +1,30 @@
+# OpenADMET-подобная задача как ТАБЛИЧНАЯ: SMILES -> RDKit-фичи (feature_transform) ->
+# по модели на каждый эндпоинт (MultiTargetEstimatorTrainer). Требует rdkit + catboost.
+model:
+  module: catboost
+  type: CatBoostRegressor
+  config: { iterations: 300, depth: 6, learning_rate: 0.05, loss_function: RMSE, verbose: false }
+
+feature_transform:
+  module: echelon3.data.molecular
+  type: SmilesFeaturizer
+  config: { smiles_column: smiles, descriptors: true, fingerprint: true, fp_bits: 512, fp_radius: 2 }
+
+data:
+  train: { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: admet_data/train.csv, target: [LogD, KSOL, HLM_CLint] } }
+  test:  { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: admet_data/test.csv,  target: [LogD, KSOL, HLM_CLint] } }
+
+metrics:
+  - mae:      { module: echelon3.metrics.tabular, type: MAE,       config: {} }
+  - rmse:     { module: echelon3.metrics.tabular, type: RMSE,      config: {} }
+  - r2:       { module: echelon3.metrics.tabular, type: R2,        config: {} }
+  - spearman: { module: echelon3.metrics.tabular, type: SpearmanR, config: {} }
+
+trainer:
+  module: echelon3.trainers.estimator
+  type: MultiTargetEstimatorTrainer
+  config: {}
+
+target: { path: ./out_admet, checkpoints_to_keep: 1 }

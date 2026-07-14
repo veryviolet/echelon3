@@ -61,12 +61,14 @@ class EstimatorTrainer:
         self.use_categorical = bool(use_categorical)
 
     # ------------------------------------------------------------------ predict
-    def _scores(self, X):
-        """Вероятность положительного класса, если модель умеет; иначе сырой predict."""
-        if hasattr(self.model, "predict_proba"):
-            p = np.asarray(self.model.predict_proba(X))
+    def _scores(self, X, model=None):
+        """Вероятность положительного класса (классификатор) или сырой predict
+        (регрессор). model=None -> self.model."""
+        model = model if model is not None else self.model
+        if hasattr(model, "predict_proba"):
+            p = np.asarray(model.predict_proba(X))
             return p[:, 1] if (p.ndim == 2 and p.shape[1] == 2) else p
-        return np.asarray(self.model.predict(X))
+        return np.asarray(model.predict(X))
 
     # -------------------------------------------------------------------- train
     def train(self):
@@ -148,3 +150,79 @@ class EstimatorTrainer:
     def close(self):
         # нет воркеров/ресурсов — заглушка ради совместимости с CLI (trainer.close()).
         pass
+
+
+class MultiTargetEstimatorTrainer(EstimatorTrainer):
+    """Много таргетов за один ран (напр. 9 ADMET-эндпоинтов): на каждый target — своя
+    копия модели (``sklearn.base.clone``), обучается на строках, где таргет измерен
+    (NaN-маска; ADMET-данные разрежены). Метрики считаются per-target. Общий
+    ``feature_transform`` (напр. SmilesFeaturizer) фитится ОДИН раз и переиспользуется.
+    Бандл: ``{target: model}`` + общий feature_transform.
+
+    Конфиг тот же, что у EstimatorTrainer, но ``data.*.config.target`` — СПИСОК эндпоинтов.
+    """
+
+    def train(self):
+        from sklearn.base import clone
+
+        X, _ = self.train_data.Xy()
+        Y = self.train_data.y_frame()
+        if Y is None:
+            raise ValueError("MultiTargetEstimatorTrainer: no target columns to fit on")
+        targets = list(getattr(self.train_data, "targets", [self.train_data.target]))
+
+        if self.feature_transform is not None:
+            print(f"--> Fitting feature_transform ({type(self.feature_transform).__name__})...")
+            Xt = np.asarray(self.feature_transform.fit_transform(X, None))
+        else:
+            Xt = np.asarray(X)
+
+        prepared = {}
+        for name, ds in self.test_data.items():
+            Xv, _ = ds.Xy()
+            Xvt = self.feature_transform.transform(Xv) if self.feature_transform is not None else Xv
+            prepared[name] = (np.asarray(Xvt), ds.y_frame())
+
+        models, results = {}, {name: {} for name in self.test_data}
+        for t in targets:
+            yt = np.asarray(Y[t], dtype=float)
+            mask = ~np.isnan(yt)
+            model = clone(self.model)
+            print(f"--> [{t}] fitting on {int(mask.sum())} labelled rows...")
+            model.fit(Xt[mask], yt[mask])
+            models[t] = model
+            for name, (Xvt, Yv) in prepared.items():
+                if Yv is None or t not in Yv:
+                    continue
+                yv = np.asarray(Yv[t], dtype=float)
+                vmask = ~np.isnan(yv)
+                if vmask.sum() == 0:
+                    continue
+                preds = self._scores(Xvt[vmask], model=model)
+                vals = {}
+                for mname, metric in self.metrics.items():
+                    metric.reset()
+                    metric.update(preds, yv[vmask])
+                    vals[mname] = metric.compute()
+                results[name][t] = vals
+                parts = ", ".join(f"{k}={_fmt(v)}" for k, v in vals.items())
+                print(f"--> Evaluated [{name}/{t}]: {parts}")
+
+        self._save_multi(models, results, targets)
+        return results
+
+    def _save_multi(self, models, results, targets):
+        self.ckpt.init_storage()
+        bundle = {CHECKPOINT_ESTIMATOR_KEYWORD: {
+            "framework": "echelon3.estimator.multitarget",
+            "models": models,                       # {target: fitted model}
+            "feature_transform": self.feature_transform,
+            "features": list(getattr(self.train_data, "feature_names", [])),
+            "targets": list(targets),
+            "predict_proba": hasattr(self.model, "predict_proba"),
+            "metrics": results,
+        }}
+        self.ckpt.save_checkpoint(bundle)
+        print(Fore.LIGHTGREEN_EX
+              + f"--> Saved multi-target bundle ({len(models)} targets) to {self.ckpt.path}"
+              + Fore.CYAN)

@@ -1,0 +1,33 @@
+# Вторая лидербордовая ветка OpenADMET — 2D GNN (Chemprop-style) на SGD-пути echelon3.
+# Есть секция net: -> обычная картиночно-SGD сборка (net/loss/optimizer/dataloaders), только
+# «картинки» это молекулярные графы. Один эндпоинт (LogD); чистый torch GNN, без torch_geometric.
+net:
+  module: echelon3.nets.mol_gcn
+  type: MolGCN
+  config: { hidden: 96, layers: 3, dropout: 0.1 }
+
+data:
+  train: { module: echelon3.data.molecular, type: MoleculeGraphDataset,
+           config: { path: admet_data/train.csv, target: LogD, max_atoms: 64 } }
+  test:  { module: echelon3.data.molecular, type: MoleculeGraphDataset,
+           config: { path: admet_data/test.csv,  target: LogD, max_atoms: 64 } }
+
+dataloaders:
+  train: { module: torch.utils.data, type: DataLoader, config: { batch_size: 32, shuffle: true, drop_last: true, num_workers: 0 } }
+  test:  { module: torch.utils.data, type: DataLoader, config: { batch_size: 64, num_workers: 0 } }
+
+loss:
+  - mse: { module: torch.nn, type: MSELoss, config: {} }
+
+metrics:
+  - rmse: { module: torchmetrics, type: MeanSquaredError, config: { squared: false } }
+  - r2:   { module: torchmetrics, type: R2Score,          config: {} }
+
+optimizer: { module: torch.optim, type: AdamW, config: { lr: 0.002, weight_decay: 0.0001 } }
+
+trainer:
+  module: echelon3.trainers.baseline
+  type: Trainer
+  config: { epochs: 25, keep_best_on: { r2: { mode: directional, value: high } } }
+
+target: { path: ./out_gnn, checkpoints_to_keep: 1 }

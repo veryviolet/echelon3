@@ -84,3 +84,51 @@ class Accuracy(_TabularMetric):
         from sklearn.metrics import accuracy_score
         pred, true = self._arrays()
         return float(accuracy_score(true, (_pos_scores(pred) > self.threshold).astype(int)))
+
+
+# ------------------------------------------------------------------ регрессия
+# ADMET-эндпоинты — регрессия; модель отдаёт predict (не proba). Метрики — по прямому выходу.
+
+class MAE(_TabularMetric):
+    """Mean absolute error (ниже — лучше)."""
+
+    def compute(self):
+        from sklearn.metrics import mean_absolute_error
+        pred, true = self._arrays()
+        return float(mean_absolute_error(true, np.asarray(pred).ravel()))
+
+
+class RMSE(_TabularMetric):
+    """Root mean squared error (ниже — лучше)."""
+
+    def compute(self):
+        from sklearn.metrics import mean_squared_error
+        pred, true = self._arrays()
+        return float(mean_squared_error(true, np.asarray(pred).ravel()) ** 0.5)
+
+
+class R2(_TabularMetric):
+    """Коэффициент детерминации R² (выше — лучше)."""
+
+    def compute(self):
+        from sklearn.metrics import r2_score
+        pred, true = self._arrays()
+        return float(r2_score(true, np.asarray(pred).ravel()))
+
+
+class SpearmanR(_TabularMetric):
+    """Ранговая корреляция Спирмена (выше — лучше) — частая метрика ADMET-лидербордов."""
+
+    def compute(self):
+        from scipy.stats import spearmanr
+        pred, true = self._arrays()
+        return float(spearmanr(np.asarray(pred).ravel(), np.asarray(true).ravel()).statistic)
+
+
+class PearsonR(_TabularMetric):
+    """Корреляция Пирсона (выше — лучше)."""
+
+    def compute(self):
+        from scipy.stats import pearsonr
+        pred, true = self._arrays()
+        return float(pearsonr(np.asarray(pred).ravel(), np.asarray(true).ravel())[0])

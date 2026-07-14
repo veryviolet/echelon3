@@ -82,19 +82,29 @@ class TabularDataset(Dataset):
         else:
             df = _read_file(source=source, **source_kwargs, **read_kwargs)
 
-        self.target = target
+        # target — строка (одиночный) или список (мульти-таргет, напр. ADMET-эндпоинты).
+        self.targets = [target] if isinstance(target, str) else list(target)
+        self.target = self.targets[0]
         drop = set(drop or [])
         if features is None:
-            features = [c for c in df.columns if c != target and c not in drop]
+            features = [c for c in df.columns if c not in self.targets and c not in drop]
         self.features = list(features)
         self.categorical = list(categorical or [])
 
         self._X = df[self.features].reset_index(drop=True)
-        self._y = df[target].to_numpy() if target in df.columns else None
+        present = [t for t in self.targets if t in df.columns]
+        self._Y = df[present].reset_index(drop=True) if present else None  # все таргеты (DataFrame)
+        self._y = df[self.target].to_numpy() if self.target in df.columns else None  # первый (совместимость)
 
     def Xy(self):
-        """Весь датасет разом: ``(X: DataFrame, y: ndarray | None)`` — для fit/predict."""
+        """Весь датасет разом: ``(X: DataFrame, y: ndarray | None)`` — для fit/predict
+        (y — первый таргет; для мульти-таргета используйте :meth:`y_frame`)."""
         return self._X, self._y
+
+    def y_frame(self):
+        """DataFrame всех присутствующих таргетов (мульти-таргет) — колонки могут
+        содержать NaN (ADMET-данные разрежены: не у всех молекул измерены все эндпоинты)."""
+        return self._Y
 
     @property
     def feature_names(self):
