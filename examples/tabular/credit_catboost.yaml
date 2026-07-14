@@ -1,0 +1,32 @@
+# Тот же fit/predict-путь на CatBoost (нужен `pip install catboost`).
+# objective/loss — гиперпараметры МОДЕЛИ (loss_function/eval_metric), не отдельная секция loss:.
+model:
+  module: catboost
+  type: CatBoostClassifier
+  config:
+    iterations: 500
+    depth: 6
+    learning_rate: 0.05
+    loss_function: Logloss
+    eval_metric: AUC
+    verbose: false
+
+data:
+  train: { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: tab_data/train.csv, target: default } }
+  test:  { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: tab_data/test.csv,  target: default } }
+
+metrics:
+  - auc:  { module: echelon3.metrics.tabular, type: AUC,  config: {} }
+  - gini: { module: echelon3.metrics.tabular, type: Gini, config: {} }
+  - ks:   { module: echelon3.metrics.tabular, type: KS,   config: {} }
+
+trainer:
+  module: echelon3.trainers.estimator
+  type: EstimatorTrainer
+  config:
+    keep_best_on: [auc]
+    eval_set: true          # прокинуть test как eval_set в CatBoost.fit (ранняя остановка)
+
+target: { path: ./out_tab, checkpoints_to_keep: 1 }

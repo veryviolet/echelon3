@@ -1,0 +1,33 @@
+# Демонстрация feature_transform: LogisticRegression требует числа/масштаб — препроцессор
+# делает это декларативно. Смена движка (LogReg -> XGBoost/TabPFN) = смена только model:,
+# feature_transform не трогаем.
+model:
+  module: sklearn.linear_model
+  type: LogisticRegression
+  config: { max_iter: 300 }
+
+feature_transform:
+  module: echelon3.data.tabular
+  type: TabularPreprocessor
+  config:
+    num_impute: median
+    scale: true
+    cat_impute: most_frequent
+    encode: onehot           # категории (если есть) -> one-hot; числовые импутируются и масштабируются
+
+data:
+  train: { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: tab_data/train.csv, target: default } }
+  test:  { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: tab_data/test.csv,  target: default } }
+
+metrics:
+  - auc:  { module: echelon3.metrics.tabular, type: AUC,  config: {} }
+  - gini: { module: echelon3.metrics.tabular, type: Gini, config: {} }
+
+trainer:
+  module: echelon3.trainers.estimator
+  type: EstimatorTrainer
+  config: { keep_best_on: [auc] }
+
+target: { path: ./out_tab, checkpoints_to_keep: 1 }

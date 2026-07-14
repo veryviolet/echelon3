@@ -15,6 +15,13 @@ from echelon3 import warncollect
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
 from echelon3.creator import create_net, create_loss, create_optimizer, create_scheduler, create_checkpoint_manager
 from echelon3.creator import create_metrics, create_mlops_logger, create_universal
+from echelon3.creator import create_tabular_datasets, create_estimator_trainer
+
+
+def _is_estimator_cfg(cfg: DictConfig) -> bool:
+    """Estimator (fit/predict) run vs картиночный SGD run. Отличаем по секции:
+    у estimator-мира — `model:` (и нет `net:`); у SGD — `net:`."""
+    return 'model' in cfg.keys() and 'net' not in cfg.keys()
 
 
 def trainer_app(cfg: DictConfig):
@@ -23,11 +30,79 @@ def trainer_app(cfg: DictConfig):
     # иначе они шли до баннера и без цвета. Спавн-воркеры баннер не повторяют.
     print(Fore.CYAN)
     print(f'\n\n{__title__} {__version__}: trainer.\n\n')
+    # Роутинг по типу трейнера: fit/predict (деревья, табличные FM) собирается СВОЕЙ
+    # веткой (без optimizer/loss/loaders/DDP), картиночный SGD — как раньше.
+    if _is_estimator_cfg(cfg):
+        _train_estimator(cfg)
+        return
     # Встроенный DDP: если запрошено >1 GPU и мы не воркер — порождаем по процессу
     # на GPU (замена torchrun) и выходим; иначе обучаемся в этом процессе.
     if maybe_launch_ddp(cfg, _train):
         return
     _train(cfg)
+
+
+def _train_estimator(cfg: DictConfig):
+    """Сборка и запуск fit/predict-модели (EstimatorTrainer). Своя короткая сборка:
+    model + табличные датасеты + метрики + ckpt; ни optimizer/loss/loaders, ни DDP."""
+    setup_warnings()
+    device = resolve_single_device(cfg, torch.cuda.is_available())
+    print(Fore.CYAN)
+    print(f'--> Estimator (fit/predict) run. device={device} (модель сама решает, где считать)')
+
+    print(f'--> Initializing model... ')
+    model = create_universal(cfg.model)
+    _mcfg = cfg.model.config if 'config' in cfg.model.keys() else {}
+    print(Fore.LIGHTGREEN_EX, end='')
+    print(f'        {type(model).__name__}({_mcfg})')
+    print(Fore.CYAN, end='')
+
+    print(f'--> Initializing datasets... ')
+    train_data, test_data = create_tabular_datasets(cfg.data)
+    print(Fore.LIGHTGREEN_EX, end='')
+    print(f'        train: {train_data}')
+    print(f'        test:  {test_data}')
+    print(Fore.CYAN, end='')
+
+    print(f'--> Initializing metrics... ')
+    metrics = create_metrics(cfg.metrics if 'metrics' in cfg.keys() else None)
+    print(Fore.LIGHTGREEN_EX, end='')
+    for name, m in metrics.items():
+        print(f'    {name}: {type(m).__name__}')
+    print(Fore.CYAN, end='')
+
+    feature_transform = None
+    if 'feature_transform' in cfg.keys():
+        print(f'--> Initializing feature_transform... ')
+        feature_transform = create_universal(cfg.feature_transform)
+        print(Fore.LIGHTGREEN_EX, end='')
+        print(f'        {type(feature_transform).__name__}')
+        print(Fore.CYAN, end='')
+
+    print(f'--> Initializing checkpoint manager... ')
+    ckpt_manager = create_checkpoint_manager(cfg.target)
+
+    print(f'--> Initializing trainer... ')
+    trainer = create_estimator_trainer(cfg.trainer, model=model, train_data=train_data,
+                                       test_data=test_data, metrics=metrics, ckpt_manager=ckpt_manager,
+                                       feature_transform=feature_transform)
+    print(Fore.LIGHTGREEN_EX, end='')
+    print(f'        {type(trainer).__name__}')
+    print(Fore.CYAN, end='')
+
+    print(f'--> Training... ')
+    try:
+        trainer.train()
+    except KeyboardInterrupt:
+        print('\n--> Interrupted by user (Ctrl-C).', file=sys.stderr)
+        raise SystemExit(130)
+    finally:
+        warncollect.flush()
+        try:
+            trainer.close()
+        except Exception:
+            pass
+    print(Style.RESET_ALL)
 
 
 def _train(cfg: DictConfig):

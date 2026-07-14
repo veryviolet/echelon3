@@ -365,6 +365,31 @@ def create_trainer(config: DictConfig, net: torch.nn.Module, optimizer: torch.op
                        **_cfg_kwargs(config))
     return trn
 
+def create_tabular_datasets(config: DictConfig):
+    """Табличные датасеты для fit/predict-ветки: обычные компоненты (create_universal),
+    БЕЗ инъекции картиночных augment/preprocess. Поддерживает один или несколько
+    (dict именованных) test-датасетов, как и картиночный create_datasets."""
+    train_dataset = create_universal(config.train)
+    if 'test' not in config:
+        return train_dataset, None
+    test_cfg = config.test
+    if 'module' in test_cfg and 'type' in test_cfg:
+        return train_dataset, create_universal(test_cfg)
+    test_dataset = {name: create_universal(sub) for name, sub in test_cfg.items()}
+    return train_dataset, test_dataset
+
+
+def create_estimator_trainer(config: DictConfig, model, train_data, test_data, metrics,
+                             ckpt_manager, feature_transform=None):
+    """Fit/predict-трейнер (EstimatorTrainer и родня): свои инъекции — model + целые
+    датасеты + метрики + ckpt-менеджер (+ опц. feature_transform), без
+    optimizer/loss/loaders/scheduler."""
+    trainer_type = get_attr_from_module(config.module, config.type)
+    return trainer_type(model=model, train_data=train_data, test_data=test_data,
+                        metrics=metrics, ckpt_manager=ckpt_manager,
+                        feature_transform=feature_transform, **_cfg_kwargs(config))
+
+
 def create_wrapper(config: DictConfig, net):
     ev_type = get_attr_from_module(config.module, config.type)
     ev = ev_type(**_cfg_kwargs(config), core=net)

@@ -1,0 +1,16 @@
+# База: данные/метрики/трейнер/target — общее для всех движков. Движок добавляется отдельным
+# конфигом через `defaults: [credit_base]` + собственный блок model: (см. credit_{lgbm,xgb,rf}.yaml).
+data:
+  train: { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: tab_data/train.csv, target: default } }
+  test:  { module: echelon3.data.tabular, type: TabularDataset,
+           config: { path: tab_data/test.csv,  target: default } }
+metrics:
+  - auc:  { module: echelon3.metrics.tabular, type: AUC,  config: {} }
+  - gini: { module: echelon3.metrics.tabular, type: Gini, config: {} }
+  - ks:   { module: echelon3.metrics.tabular, type: KS,   config: {} }
+trainer:
+  module: echelon3.trainers.estimator
+  type: EstimatorTrainer
+  config: { keep_best_on: [auc] }
+target: { path: ./out_tab, checkpoints_to_keep: 1 }

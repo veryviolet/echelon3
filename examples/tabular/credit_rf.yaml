@@ -1,0 +1,3 @@
+defaults: [credit_base]
+model: { module: sklearn.ensemble, type: RandomForestClassifier,
+         config: { n_estimators: 300, n_jobs: -1 } }
