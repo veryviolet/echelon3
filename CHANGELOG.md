@@ -4,6 +4,31 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.0 — 2026-07-15
+
+### Added
+
+- **Tabular fit/predict (estimator) trainer family** — a second, independent trainer stack
+  next to the image/SGD one, for models that are fit once rather than trained by gradient
+  descent: gradient-boosted trees (CatBoost/XGBoost/LightGBM/sklearn) and tabular foundation
+  models (TabPFN/TabICL/TabFM/TabGPT). Same `module/type/config` idiom, same `echelon3 train`:
+  a config with a `model:` section (and no `net:`) routes to the estimator assembly.
+  - `trainers/estimator.py`: `EstimatorTrainer` and `MultiTargetEstimatorTrainer` (one cloned
+    model per target, fit only on rows where that target is measured — NaN-masked; bundle
+    `{target: model}`). No optimizer/loss/dataloaders/scheduler — the objective/loss is a
+    hyperparameter of the model itself (`model.config`).
+  - `data/tabular.py`: `TabularDataset` (sources: csv/parquet/feather/json/tsv, SQL, or an
+    in-memory frame; single- or multi-target) and `TabularPreprocessor` (declarative sklearn
+    `ColumnTransformer` as a `feature_transform`, so swapping engines stays a change of only
+    `model:` even on categorical/NaN data).
+  - `metrics/tabular.py`: classification AUC/Gini/KS/LogLoss/Accuracy and regression
+    MAE/RMSE/R2/SpearmanR/PearsonR.
+  - `inference/tabular.py`: `load_bundle` + `predict` — the saved `.tar` is a self-contained
+    inference artifact (model(s) + fitted feature pipeline + feature names + target).
+- Molecular/ADMET components (SMILES featurizer, molecular-graph dataset, a 2D GNN) live in the
+  public `echelon3_zoo` package under the `molecular` extra — the engine stays domain-agnostic
+  and free of an rdkit dependency.
+
 ## 0.8.7 — 2026-07-13
 
 ### Fixed

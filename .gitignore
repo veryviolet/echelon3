@@ -14,3 +14,10 @@ exports/
 dist/
 *.egg-info/
 site/
+
+# generated example data / outputs (tabular)
+examples/tabular/tab_data/
+examples/tabular/admet_data/
+out_tab/
+out_admet/
+out_gnn/

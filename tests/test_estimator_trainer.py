@@ -78,6 +78,43 @@ def test_feature_transform_enables_categorical(tmp_path):
     assert preds.shape[0] == 50 and 0.0 <= preds.min() and preds.max() <= 1.0
 
 
+def test_multitarget_all_nan_target_skipped(tmp_path):
+    """M1: таргет со всеми-NaN в train не должен ронять весь ран — пропускаем его."""
+    import pytest
+    from sklearn.linear_model import LinearRegression
+    from echelon3.trainers.estimator import MultiTargetEstimatorTrainer
+    from echelon3.metrics.tabular import MAE
+
+    rng = np.random.default_rng(0)
+    n = 200
+    df = pd.DataFrame({"x1": rng.normal(size=n), "x2": rng.normal(size=n)})
+    df["ta"] = df["x1"] + rng.normal(0, 0.1, n)
+    df["tb"] = np.nan                                   # эндпоинт без измерений
+    trainer = MultiTargetEstimatorTrainer(
+        model=LinearRegression(),
+        train_data=TabularDataset(target=["ta", "tb"], frame=df),
+        test_data=TabularDataset(target=["ta", "tb"], frame=df.copy()),
+        metrics={"mae": MAE()},
+        ckpt_manager=CheckpointManager(path=str(tmp_path), checkpoints_to_keep=1),
+    )
+    trainer.train()                                     # не падает на tb
+    assert set(load_bundle(str(tmp_path))["models"]) == {"ta"}   # tb пропущен
+
+
+def test_estimator_rejects_multitarget(tmp_path):
+    """m2: одиночный EstimatorTrainer не должен молча учить только первый из списка таргетов."""
+    import pytest
+    df = pd.DataFrame({"x": np.arange(20.0), "y1": np.arange(20.0), "y2": np.arange(20.0)})
+    trainer = EstimatorTrainer(
+        model=LogisticRegression(),
+        train_data=TabularDataset(target=["y1", "y2"], frame=df),
+        test_data=None, metrics={},
+        ckpt_manager=CheckpointManager(path=str(tmp_path), checkpoints_to_keep=1),
+    )
+    with pytest.raises(ValueError):
+        trainer.train()
+
+
 def test_multi_test_sets(tmp_path):
     trainer = EstimatorTrainer(
         model=LogisticRegression(),

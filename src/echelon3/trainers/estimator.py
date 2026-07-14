@@ -75,6 +75,10 @@ class EstimatorTrainer:
         Xtr, ytr = self.train_data.Xy()
         if ytr is None:
             raise ValueError("EstimatorTrainer: train dataset has no target column to fit on")
+        if len(getattr(self.train_data, "targets", []) or []) > 1:
+            raise ValueError(
+                "EstimatorTrainer received a multi-target dataset (target is a list) — use "
+                "echelon3.trainers.estimator.MultiTargetEstimatorTrainer instead")
 
         # Препроцессинг признаков: фитим на train, применяем к тестам (без утечки), кладём
         # зафиченным в бандл. Держит смену движка сменой только model: даже на категориях.
@@ -96,8 +100,11 @@ class EstimatorTrainer:
         try:
             self.model.fit(Xtr, ytr, **fit_kwargs)
         except TypeError:
-            # модель не принимает наши extra fit-kwargs (eval_set/cat_features) — фитим голо
-            self.model.fit(Xtr, ytr)
+            # Модель не приняла АВТО-добавленные eval_set/cat_features — снимаем только их
+            # (пользовательские config.fit_kwargs сохраняем) и фитим повторно.
+            stripped = {k: v for k, v in fit_kwargs.items() if k not in ("eval_set", "cat_features")}
+            print("--> model.fit rejected eval_set/cat_features — refitting without them")
+            self.model.fit(Xtr, ytr, **stripped)
         print(Fore.LIGHTGREEN_EX + "--> Fitted." + Fore.CYAN)
 
         results = {}
@@ -141,8 +148,12 @@ class EstimatorTrainer:
         best = ""
         if self.keep_best_on and results:
             first_set = next(iter(results.values()))
-            tracked = {k: first_set[k] for k in self.keep_best_on if k in first_set} \
-                if hasattr(self.keep_best_on, "__iter__") else {}
+            kb = self.keep_best_on
+            if isinstance(kb, str):
+                kb = [kb]
+            elif hasattr(kb, "keys"):          # dict-форма keep_best_on
+                kb = list(kb.keys())
+            tracked = {k: first_set[k] for k in (kb or []) if k in first_set}
             if tracked:
                 best = " (" + ", ".join(f"{k}={_fmt(v)}" for k, v in tracked.items()) + ")"
         print(Fore.LIGHTGREEN_EX + f"--> Saved inference bundle to {self.ckpt.path}{best}" + Fore.CYAN)
@@ -187,6 +198,9 @@ class MultiTargetEstimatorTrainer(EstimatorTrainer):
         for t in targets:
             yt = np.asarray(Y[t], dtype=float)
             mask = ~np.isnan(yt)
+            if mask.sum() == 0:
+                print(f"--> [{t}] no labelled rows in train — skipping this target")
+                continue
             model = clone(self.model)
             print(f"--> [{t}] fitting on {int(mask.sum())} labelled rows...")
             model.fit(Xt[mask], yt[mask])
