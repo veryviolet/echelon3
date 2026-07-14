@@ -1003,6 +1003,30 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
+<h2 id="090-2026-07-15">0.9.0 — 2026-07-15<a class="headerlink" href="#090-2026-07-15" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Tabular fit/predict (estimator) trainer family</strong> — a second, independent trainer stack
+  next to the image/SGD one, for models that are fit once rather than trained by gradient
+  descent: gradient-boosted trees (CatBoost/XGBoost/LightGBM/sklearn) and tabular foundation
+  models (TabPFN/TabICL/TabFM/TabGPT). Same <code>module/type/config</code> idiom, same <code>echelon3 train</code>:
+  a config with a <code>model:</code> section (and no <code>net:</code>) routes to the estimator assembly.</li>
+<li><code>trainers/estimator.py</code>: <code>EstimatorTrainer</code> and <code>MultiTargetEstimatorTrainer</code> (one cloned
+    model per target, fit only on rows where that target is measured — NaN-masked; bundle
+    <code>{target: model}</code>). No optimizer/loss/dataloaders/scheduler — the objective/loss is a
+    hyperparameter of the model itself (<code>model.config</code>).</li>
+<li><code>data/tabular.py</code>: <code>TabularDataset</code> (sources: csv/parquet/feather/json/tsv, SQL, or an
+    in-memory frame; single- or multi-target) and <code>TabularPreprocessor</code> (declarative sklearn
+    <code>ColumnTransformer</code> as a <code>feature_transform</code>, so swapping engines stays a change of only
+    <code>model:</code> even on categorical/NaN data).</li>
+<li><code>metrics/tabular.py</code>: classification AUC/Gini/KS/LogLoss/Accuracy and regression
+    MAE/RMSE/R2/SpearmanR/PearsonR.</li>
+<li><code>inference/tabular.py</code>: <code>load_bundle</code> + <code>predict</code> — the saved <code>.tar</code> is a self-contained
+    inference artifact (model(s) + fitted feature pipeline + feature names + target).</li>
+<li>Molecular/ADMET components (SMILES featurizer, molecular-graph dataset, a 2D GNN) live in the
+  public <code>echelon3_zoo</code> package under the <code>molecular</code> extra — the engine stays domain-agnostic
+  and free of an rdkit dependency.</li>
+</ul>
 <h2 id="087-2026-07-13">0.8.7 — 2026-07-13<a class="headerlink" href="#087-2026-07-13" title="Permanent link">&para;</a></h2>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1165,7 +1189,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   are unchanged.</li>
 </ul>
 <h2 id="077-2026-07-08">0.7.7 — 2026-07-08<a class="headerlink" href="#077-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Metric.dist_reduce()</code> hook — exact custom-metric aggregation under DDP.</strong>
   Validation is sharded per rank; torchmetrics reduce their state inside <code>compute()</code>,
@@ -1293,7 +1317,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   <code>compile_mode</code> knobs are unchanged.</li>
 </ul>
 <h2 id="070-2026-07-08">0.7.0 — 2026-07-08<a class="headerlink" href="#070-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>torch.compile</code> support (experimental, opt-in).</strong> <code>trainer.config.compile: true</code>
   (with optional <code>compile_mode</code>) compiles the network — kernel fusion to cut launch
@@ -1313,7 +1337,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   by position keeps the trainer agnostic to the name.</li>
 </ul>
 <h2 id="060-2026-07-08">0.6.0 — 2026-07-08<a class="headerlink" href="#060-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Trainer.compute_losses(source, labels, net=None)</code> — an extension seam for
   the forward pass and loss routing.</strong> It runs inside the trainer's autocast and
@@ -1387,7 +1411,7 @@ precision defaults to bf16.</p>
   when there are classes to ignore. Verified end to end — a <code>Segmenter</code> smoke on
   synthetic masks moves mIoU from ~0.85 to ~0.96.</li>
 </ul>
-<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>examples/segmentation/</code>: a self-contained semantic-segmentation smoke
   (synthetic image/mask generator, a tiny dependency-free backbone, a <code>Segmenter</code></li>
@@ -1415,7 +1439,7 @@ precision defaults to bf16.</p>
 <li>Class labels are coerced to integer tensors in both the encoder and the mAP
     metric (Albumentations round-trips them through float arrays).</li>
 </ul>
-<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
+<h3 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>detection</code> extra (<code>faster-coco-eval</code>) — the <code>mAP</code> metric needs a COCO backend;
   <code>mAP</code> takes an optional <code>backend</code> argument (default <code>faster_coco_eval</code>).</li>
@@ -1424,7 +1448,7 @@ precision defaults to bf16.</p>
   that trains, validates (mAP rises above zero) and checkpoints on CPU or GPU.</li>
 </ul>
 <h2 id="031-2026-07-07">0.3.1 — 2026-07-07<a class="headerlink" href="#031-2026-07-07" title="Permanent link">&para;</a></h2>
-<h3 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h3>
+<h3 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Full MkDocs (Material) documentation site published to GitHub Pages at
   <a href="https://veryviolet.github.io/echelon3/">https://veryviolet.github.io/echelon3/</a>: getting-started, concepts
@@ -1434,7 +1458,7 @@ precision defaults to bf16.</p>
 <li><code>[project.urls]</code> with a <code>Documentation</code> link, so PyPI shows it.</li>
 </ul>
 <h2 id="030-2026-07-05">0.3.0 — 2026-07-05<a class="headerlink" href="#030-2026-07-05" title="Permanent link">&para;</a></h2>
-<h3 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">&para;</a></h3>
+<h3 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>echelon3-finetune</code> CLI: warm-start from a checkpoint (<code>init_from</code>), freezing
   by regex patterns (<code>finetune.freeze_patterns</code>), head-only training and
@@ -1442,7 +1466,7 @@ precision defaults to bf16.</p>
   blocks present it behaves exactly like <code>echelon3-train</code>.</li>
 </ul>
 <h2 id="020-2026-07-05">0.2.0 — 2026-07-05<a class="headerlink" href="#020-2026-07-05" title="Permanent link">&para;</a></h2>
-<h3 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">&para;</a></h3>
+<h3 id="added_8">Added<a class="headerlink" href="#added_8" title="Permanent link">&para;</a></h3>
 <ul>
 <li>ONNX export: <code>ModelExporter</code> base + <code>OnnxExporter</code>
   (preprocess → net → postprocess wrapped into a single graph),
@@ -1460,7 +1484,7 @@ precision defaults to bf16.</p>
 <h2 id="010-2026-07-05">0.1.0 — 2026-07-05<a class="headerlink" href="#010-2026-07-05" title="Permanent link">&para;</a></h2>
 <p>First public release. Core of the framework extracted from the internal
 echelon2 codebase and cleaned up:</p>
-<h3 id="added_8">Added<a class="headerlink" href="#added_8" title="Permanent link">&para;</a></h3>
+<h3 id="added_9">Added<a class="headerlink" href="#added_9" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Config-driven component factory (<code>echelon3.creator</code>): every component is a
   <code>module</code> / <code>type</code> / <code>config</code> YAML triple resolved by dynamic import, with a
