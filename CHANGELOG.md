@@ -4,6 +4,16 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.1 — 2026-07-15
+
+### Added
+
+- **`dataloaders.*.config.collate_fn` can be a component** (`module`/`type`/`config`): the
+  engine builds it into a callable and passes it to the DataLoader, instead of leaving a dict
+  that would break the loader. Enables variable-size / graph batching (sets, molecular
+  complexes) on the SGD path; domain-agnostic, applied to both train and test dataloaders.
+  (Used by the docking components in `echelon3_zoo[docking]`.)
+
 ## 0.9.0 — 2026-07-15
 
 ### Added
