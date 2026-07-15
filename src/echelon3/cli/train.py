@@ -9,7 +9,7 @@ from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli, _close_quietly
 from echelon3 import warncollect
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
@@ -268,18 +268,23 @@ def _train(cfg: DictConfig):
         if ddp.is_main():
             print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
             sys.stderr.flush()
+        # ВАЖНО: гасим DataLoader-воркеров ДО os._exit. os._exit пропускает finally, а
+        # PDEATHSIG добивает воркеров SIGKILL'ом без освобождения их семафоров — иначе
+        # resource_tracker лаунчера ругается на «leaked semaphore objects» (утечка /dev/shm).
+        _close_quietly(trainer)
         if ddp.is_ddp():
-            os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров, PDEATHSIG — воркеров
+            os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров
         raise SystemExit(130)
     except Exception:
         # Traceback печатаем ДО shutdown в stderr (stdout не-главных ранков заглушён).
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
+        _close_quietly(trainer)  # освободить семафоры воркеров и на аварийном пути
         if ddp.is_ddp():
             # Чистый destroy_process_group() может зависнуть на NCCL-teardown, пока в
             # группе висит недоделанный коллектив (упавший ранг не выходит → тихий вис).
-            # Жёсткий выход → лаунчер снимает пиров, DataLoader-воркеров добьёт PDEATHSIG.
+            # Жёсткий выход → лаунчер снимает пиров.
             sys.stderr.flush()
             os._exit(1)
         raise

@@ -174,3 +174,25 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
               file=sys.stderr)
         raise
     return True
+
+
+def _close_quietly(trainer, timeout=15.0):
+    """Best-effort graceful teardown DataLoader-воркеров перед выходом: освобождает их
+    семафоры и /dev/shm (иначе после жёсткого os._exit их добьёт PDEATHSIG-SIGKILL без
+    очистки, и resource_tracker лаунчера отчитается о «leaked semaphore objects»).
+
+    Гоняем в daemon-потоке с join(timeout): если close() где-то подвиснет (напр.
+    _MultiProcessingDataLoaderIter._shutdown_workers ждёт pin_memory_thread.join() БЕЗ
+    таймаута), мы не задержим жёсткий выход дольше timeout — подвисший поток добьёт
+    сам os._exit. Идемпотентно; ошибки глушим."""
+    import threading
+
+    def _run():
+        try:
+            trainer.close()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout)

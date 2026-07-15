@@ -4,6 +4,19 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.2 — 2026-07-16
+
+### Fixed
+
+- **DDP Ctrl-C no longer leaks DataLoader-worker semaphores.** Under DDP the rank's
+  KeyboardInterrupt/Exception handler calls `os._exit()`, which bypasses the `finally:`
+  that runs `trainer.close()` — so the DataLoader workers were hard-killed by PDEATHSIG
+  without releasing their semaphores, and the launcher's `resource_tracker` warned about
+  "leaked semaphore objects" (leaking /dev/shm). `trainer.close()` now runs before every
+  `os._exit` in `train`/`finetune` (via `_close_quietly`, a best-effort call bounded by a
+  watchdog timeout so it can never hang the hard exit — the `_shutdown_workers`
+  pin-memory-thread join is otherwise untimed), reaping the (persistent) workers cleanly.
+
 ## 0.9.1 — 2026-07-15
 
 ### Added
