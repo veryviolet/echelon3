@@ -269,6 +269,17 @@ def _worker_init_fn(user_fn=None):
     return partial(_pdeathsig_worker_init, _user_fn=user_fn)
 
 
+def _resolve_collate(cfg: dict) -> dict:
+    """Если ``dataloaders.*.config.collate_fn`` задан КОМПОНЕНТОМ (module/type/config) —
+    строим его (``create_universal`` -> callable) и подставляем в kwargs DataLoader.
+    Нужно для батчинга переменного размера (графы/сеты, напр. молекулярный докинг):
+    дефолтный collate стакает только одинаковые тензоры."""
+    cf = cfg.get('collate_fn')
+    if isinstance(cf, dict) and 'module' in cf and 'type' in cf:
+        cfg['collate_fn'] = create_universal(OmegaConf.create(cf))
+    return cfg
+
+
 def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     """
     Поддерживает:
@@ -311,6 +322,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
 
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
         train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))
+    _resolve_collate(train_cfg)
     train_dataloader = train_dataloader_type(dataset=train_dataset, **train_cfg)
 
     def _test_cfg(sub_cfg, dataset):
@@ -333,6 +345,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             cfg['batch_size'] = max(1, int(cfg.get('batch_size', 1)) // ddp.world_size())
         if int(cfg.get('num_workers', 0) or 0) > 0:
             cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'))
+        _resolve_collate(cfg)
         return cfg
 
     # test — один или несколько
