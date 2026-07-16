@@ -280,6 +280,21 @@ def _resolve_collate(cfg: dict) -> dict:
     return cfg
 
 
+def _require_multipart_loader(dataset, loader):
+    """MultiPartDataset индексируется КОРТЕЖЕМ (part, sample) — нужен MultiPartBatchSampler
+    (даёт MultiPartDataLoader). С обычным torch DataLoader он получит int-индексы -> невнятный
+    "'int' object is not subscriptable" из воркера. Ловим сразу понятной ошибкой (train И test)."""
+    from echelon3.data.basic import MultiPartDataset
+    if isinstance(dataset, MultiPartDataset):
+        from echelon3.dataloaders.multipart import MultiPartBatchSampler
+        if not isinstance(getattr(loader, 'batch_sampler', None), MultiPartBatchSampler):
+            raise TypeError(
+                "MultiPartDataset requires echelon3.dataloaders.multipart.MultiPartDataLoader "
+                "(its (part, sample)-tuple index needs a MultiPartBatchSampler); a plain "
+                "torch.utils.data.DataLoader sends int indices. Set the dataloader type to "
+                "echelon3.dataloaders.multipart.MultiPartDataLoader.")
+
+
 def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     """
     Поддерживает:
@@ -311,19 +326,31 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
                 f'is not divisible by world_size={world}'
             )
         train_cfg['batch_size'] = global_bs // world
-        # shuffle обеспечивает DistributedSampler (эксклюзивен с shuffle=True)
-        shuffle = bool(train_cfg.pop('shuffle', True))
-        train_cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(
-            train_dataset, shuffle=shuffle, drop_last=bool(train_cfg.get('drop_last', False))
-        )
-        print(f'--> DDP dataloader: global batch {global_bs} = '
-              f'{train_cfg["batch_size"]}/process x {world} processes '
-              f'(num_workers={train_cfg.get("num_workers", 0)} per process)')
+        from echelon3.data.basic import MultiPartDataset
+        if isinstance(train_dataset, MultiPartDataset):
+            # MultiPartDataset индексируется КОРТЕЖЕМ (part, sample) — int-индексный
+            # DistributedSampler несовместим. Шардинг по рангам делает DDP-осведомлённый
+            # MultiPartBatchSampler (внутри MultiPartDataLoader), поэтому sampler не ставим;
+            # shuffle тоже его — убираем, чтобы не конфликтовал с batch_sampler.
+            train_cfg.pop('shuffle', None)
+            print(f'--> DDP dataloader: MultiPartDataset — per-part rank-sharding via '
+                  f'MultiPartBatchSampler; per-process batch {train_cfg["batch_size"]} x {world} = {global_bs}')
+        else:
+            # shuffle обеспечивает DistributedSampler (эксклюзивен с shuffle=True)
+            shuffle = bool(train_cfg.pop('shuffle', True))
+            train_cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(
+                train_dataset, shuffle=shuffle, drop_last=bool(train_cfg.get('drop_last', False))
+            )
+            print(f'--> DDP dataloader: global batch {global_bs} = '
+                  f'{train_cfg["batch_size"]}/process x {world} processes '
+                  f'(num_workers={train_cfg.get("num_workers", 0)} per process)')
 
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
         train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))
     _resolve_collate(train_cfg)
     train_dataloader = train_dataloader_type(dataset=train_dataset, **train_cfg)
+
+    _require_multipart_loader(train_dataset, train_dataloader)
 
     def _test_cfg(sub_cfg, dataset):
         cfg = OmegaConf.to_container(sub_cfg, resolve=True) if sub_cfg is not None else {}
@@ -337,12 +364,12 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             # а fork с NCCL безопасен эмпирически — train-лоадеры так работают.
             cfg['num_workers'] = min(int(cfg.get('num_workers', 4)), 4)
             cfg.pop('shuffle', None)
-            cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(
-                dataset, shuffle=False
-            )
             # batch_size конфига — глобальный (в DP его резал на карты сам
             # DataParallel; полный батч 40 на одной карте = OOM в interpolate).
             cfg['batch_size'] = max(1, int(cfg.get('batch_size', 1)) // ddp.world_size())
+            from echelon3.data.basic import MultiPartDataset
+            if not isinstance(dataset, MultiPartDataset):     # MultiPart шардит свой batch_sampler
+                cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False)
         if int(cfg.get('num_workers', 0) or 0) > 0:
             cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'))
         _resolve_collate(cfg)
@@ -356,11 +383,13 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             sub_cfg = config.test[name]
             test_dataloader_type = get_attr_from_module(sub_cfg.module, sub_cfg.type)
             test_dataloaders[name] = test_dataloader_type(dataset=ds, **_test_cfg(sub_cfg.config if 'config' in sub_cfg else None, ds))
+            _require_multipart_loader(ds, test_dataloaders[name])
         return train_dataloader, test_dataloaders
     else:
         # одиночный тест‑датасет (старый формат)
         test_dataloader_type = get_attr_from_module(config.test.module, config.test.type)
         test_dataloader = test_dataloader_type(dataset=test_dataset, **_test_cfg(config.test.config if 'config' in config.test else None, test_dataset))
+        _require_multipart_loader(test_dataset, test_dataloader)
         return train_dataloader, test_dataloader
 
 def create_checkpoint_manager(config: DictConfig):

@@ -4,6 +4,24 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.3 — 2026-07-16
+
+### Fixed
+
+- **MultiPartDataset now works under DDP.** `create_dataloaders` no longer injects an
+  int-index `DistributedSampler` for a `MultiPartDataset` (its index is a `(part, sample)`
+  tuple — the mismatch crashed the worker with `'int' object is not subscriptable`).
+  `MultiPartBatchSampler` is now DDP-aware and rank-shards the largest part, padding to an
+  **equal per-rank count** so every rank yields the same number of batches (no gradient
+  all-reduce hang). A `MultiPartDataset` paired with a plain `DataLoader` (train or test) now
+  raises a **clear error** naming `MultiPartDataLoader` instead of the cryptic worker crash.
+- `MultiPartBatchSampler.__len__` now uses the same per-part quota as `__iter__`
+  (`quants[max_part]`, not `int(share*batch_size)`): the mismatch overstated `len()` when the
+  largest part was configured last with fractional shares, which silently skipped
+  end-of-epoch validation and checkpoint saving.
+- `MultiPartDataLoader` default `prefetch_factor` `2 -> None` (the hardcoded `2` crashed
+  `num_workers=0` on modern torch).
+
 ## 0.9.2 — 2026-07-16
 
 ### Fixed
