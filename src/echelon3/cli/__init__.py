@@ -132,9 +132,14 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
                 print(f"--> WARNING: {len(gpus)}×{_nw}={len(gpus) * _nw} DataLoader workers "
                       f"> {_cores} cores — CPU over-subscription; lower num_workers "
                       "(rule of thumb: cores / ranks per rank).")
-            if _dl.get("persistent_workers"):
-                print("--> WARNING: persistent_workers=true keeps workers alive between "
-                      "epochs — higher risk of orphaned processes on an unclean stop.")
+            # persistent_workers для train дефолтится в true при num_workers>0 (это делает
+            # create_dataloaders в рантайме — в конфиге ключа может не быть). Информируем,
+            # когда флаг эффективно включён (не выключен явно).
+            if _dl.get("persistent_workers") is not False:
+                print("--> persistent_workers is on (engine default at num_workers>0): train "
+                      "workers stay alive between epochs — fewer respawns and less Ctrl-C "
+                      "spawn-time noise, but watch node RAM / orphaned processes on an unclean "
+                      "stop (set dataloaders.train.config.persistent_workers: false to opt out).")
     except Exception:
         pass
 

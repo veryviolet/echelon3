@@ -347,6 +347,12 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
 
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
         train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))
+        # По умолчанию держим воркеров живыми между эпохами. Иначе они переспавниваются
+        # каждую эпоху, и Ctrl-C на границе эпохи ловит их в момент bootstrap (spawn:
+        # import torch / pickle.load ДО нашего worker_init) — 4 трейсбека KeyboardInterrupt
+        # + утёкшие семафоры от полу-инициализированных процессов. setdefault — явное
+        # значение юзера не трогаем; ветка гарантирует num_workers>0 (иначе torch падает).
+        train_cfg.setdefault('persistent_workers', True)
     _resolve_collate(train_cfg)
     train_dataloader = train_dataloader_type(dataset=train_dataset, **train_cfg)
 
@@ -372,6 +378,10 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
                 cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False)
         if int(cfg.get('num_workers', 0) or 0) > 0:
             cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'))
+            # persistent_workers НЕ форсим для eval: валидация — не тугой per-epoch цикл
+            # (мотивация «Ctrl-C на границе эпохи» тут слабая), а резидентные eval-воркеры
+            # весь прогон рядом с train-воркерами (под DDP дефолт 4) зря держат RAM. Юзер
+            # может включить сам, если надо.
         _resolve_collate(cfg)
         return cfg
 

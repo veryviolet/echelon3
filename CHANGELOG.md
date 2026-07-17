@@ -4,6 +4,23 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.6 — 2026-07-18
+
+### Changed
+
+- **`persistent_workers` now defaults to `true` for the training DataLoader when
+  `num_workers > 0`.** Previously workers were torn down and respawned every epoch; a
+  Ctrl-C landing at an epoch boundary could catch a worker mid-bootstrap (under `spawn`:
+  importing torch / unpickling the payload — *before* echelon3's worker-init installs
+  `SIGINT → SIG_IGN`), which dumped `KeyboardInterrupt` tracebacks and leaked semaphores
+  from the half-started processes. Keeping workers alive across epochs removes that
+  per-epoch window (and saves the respawn cost). Applied via `setdefault`, so an explicit
+  `dataloaders.train.config.persistent_workers: false` is respected, and only when
+  `num_workers > 0` (torch rejects the option otherwise). Eval loaders are intentionally
+  left non-persistent — validation is not a tight per-epoch loop, and transient eval
+  workers avoid holding node RAM for the whole run. The DDP launcher now prints a short
+  informational line noting the default is on and how to opt out.
+
 ## 0.9.5 — 2026-07-18
 
 ### Fixed
