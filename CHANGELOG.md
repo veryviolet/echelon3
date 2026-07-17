@@ -4,6 +4,22 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.4 — 2026-07-17
+
+### Fixed
+
+- **DDP Ctrl-C no longer aborts with a scary traceback / `Fatal Python error: Aborted`
+  when a DataLoader worker is killed by SIGINT first.** On Ctrl-C the whole process group
+  gets SIGINT and a worker can die before echelon3's worker_init installs `SIG_IGN`
+  (startup race); torch then raises, in the rank, either
+  `DataLoader worker ... is killed by signal: Interrupt` or — more often on recent torch —
+  `DataLoader worker ... exited unexpectedly`, which the crash path reported as a failure
+  (traceback + `os._exit(1)`), and teardown could C++-abort. The rank now records that a
+  SIGINT was actually seen (a tiny handler layered on the default `KeyboardInterrupt`
+  behaviour) and treats a worker-death `RuntimeError` as a clean interrupt (exit 130) —
+  but only after a real SIGINT, so genuine worker crashes (OOM SIGKILL, segfault) and
+  non-worker errors still surface loudly.
+
 ## 0.9.3 — 2026-07-16
 
 ### Fixed

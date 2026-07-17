@@ -176,6 +176,53 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     return True
 
 
+def _is_sigint_worker_death(exc) -> bool:
+    """Ctrl-C идёт всей группе процессов; иногда SIGINT убивает воркер DataLoader'а РАНЬШЕ,
+    чем тот успел выставить SIG_IGN (наш _pdeathsig_worker_init) — тогда главный процесс
+    получает не KeyboardInterrupt, а torch'евый RuntimeError
+    'DataLoader worker (pid ...) is killed by signal: Interrupt' (+ дальше C++ terminate →
+    Fatal Python error: Aborted). Это пользовательское прерывание, а не падёж — распознаём,
+    чтобы завершиться ЧИСТО (exit 130), а не печатать страшный traceback/абортиться.
+    Смерть воркера от ДРУГОГО сигнала (SIGKILL/SIGSEGV — OOM, реальный краш) сюда не попадает."""
+    s = str(exc)
+    return isinstance(exc, RuntimeError) and 'killed by signal' in s and \
+        ('Interrupt' in s or 'SIGINT' in s)
+
+
+_SIGINT_SEEN = False
+
+
+def _install_sigint_flag():
+    """В главном процессе ранга помечаем факт Ctrl-C флагом и поднимаем KeyboardInterrupt
+    (штатное поведение — как дефолтный обработчик). Флаг нужен, чтобы отличить смерть
+    воркера DataLoader'а ОТ Ctrl-C от настоящего краша воркера: на свежем torch SIGINT-смерть
+    воркера часто всплывает как 'DataLoader worker ... exited unexpectedly' (неотличимо от
+    OOM по тексту), но при выставленном флаге это именно прерывание."""
+    import signal
+
+    def _handler(signum, frame):
+        global _SIGINT_SEEN
+        _SIGINT_SEEN = True
+        raise KeyboardInterrupt
+
+    try:
+        signal.signal(signal.SIGINT, _handler)
+    except Exception:
+        pass
+
+
+def _looks_like_interrupt(exc) -> bool:
+    """True, если исключение — следствие Ctrl-C: torch явно назвал сигнал Interrupt/SIGINT,
+    ИЛИ был SIGINT (флаг) и это смерть воркера DataLoader'а (в т.ч. 'exited unexpectedly').
+    Без флага 'exited unexpectedly' НЕ считается прерыванием (мог быть OOM/segfault)."""
+    if _is_sigint_worker_death(exc):
+        return True
+    if _SIGINT_SEEN and isinstance(exc, RuntimeError):
+        s = str(exc)
+        return 'DataLoader worker' in s and ('exited unexpectedly' in s or 'killed by signal' in s)
+    return False
+
+
 def _close_quietly(trainer, timeout=15.0):
     """Best-effort graceful teardown DataLoader-воркеров перед выходом: освобождает их
     семафоры и /dev/shm (иначе после жёсткого os._exit их добьёт PDEATHSIG-SIGKILL без

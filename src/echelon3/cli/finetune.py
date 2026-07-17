@@ -30,7 +30,8 @@ import sys
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli, _close_quietly
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
+from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag
 from echelon3 import warncollect
 from echelon3.creator import (
     create_datasets, create_augments, create_preprocesses, create_dataloaders,
@@ -83,6 +84,7 @@ def finetune_app(cfg: DictConfig):
 
 def _finetune(cfg: DictConfig):
     setup_warnings()  # копить предупреждения, саммари — перед каждой валидацией
+    _install_sigint_flag()  # помечать Ctrl-C флагом (отличить смерть воркера от OOM)
     use_ddp = ddp.init_ddp_if_needed()
     _tcfg = cfg.trainer.config if ('trainer' in cfg.keys() and 'config' in cfg.trainer.keys()) else {}
     runtime.setup_fast_matmul(tf32=_tcfg.get('tf32', True),
@@ -196,7 +198,17 @@ def _finetune(cfg: DictConfig):
         if ddp.is_ddp():
             os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров
         raise SystemExit(130)
-    except Exception:
+    except Exception as e:
+        # Ctrl-C мог убить воркер-даталоадера раньше главного (гонка до SIG_IGN) — torch
+        # кидает 'worker ... killed by signal: Interrupt'. Прерывание, не падёж: чистый выход.
+        if _looks_like_interrupt(e):
+            if ddp.is_main():
+                print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
+                sys.stderr.flush()
+            _close_quietly(trainer)
+            if ddp.is_ddp():
+                os._exit(130)
+            raise SystemExit(130)
         # Traceback в stderr (stdout не-главных рангов заглушён). Под DDP — жёсткий
         # выход: destroy_process_group() может зависнуть на NCCL-teardown → тихий вис.
         # os._exit → лаунчер снимает пиров.

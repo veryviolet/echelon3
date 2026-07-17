@@ -9,7 +9,8 @@ from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
-from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli, _close_quietly
+from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
+from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag
 from echelon3 import warncollect
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
@@ -108,6 +109,7 @@ def _train_estimator(cfg: DictConfig):
 def _train(cfg: DictConfig):
 
     setup_warnings()  # копить предупреждения, саммари — перед каждой валидацией
+    _install_sigint_flag()  # помечать Ctrl-C флагом (отличить смерть воркера от OOM)
     use_ddp = ddp.init_ddp_if_needed()
 
     # TF32 matmul + cuDNN autotune (process-level) — до создания сети.
@@ -275,7 +277,18 @@ def _train(cfg: DictConfig):
         if ddp.is_ddp():
             os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров
         raise SystemExit(130)
-    except Exception:
+    except Exception as e:
+        # Ctrl-C мог убить воркер-даталоадера раньше главного (гонка до SIG_IGN) — torch
+        # кидает RuntimeError 'worker ... killed by signal: Interrupt'. Это прерывание, а не
+        # падёж: гасим чисто (exit 130), без страшного traceback/аборта.
+        if _looks_like_interrupt(e):
+            if ddp.is_main():
+                print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
+                sys.stderr.flush()
+            _close_quietly(trainer)
+            if ddp.is_ddp():
+                os._exit(130)
+            raise SystemExit(130)
         # Traceback печатаем ДО shutdown в stderr (stdout не-главных ранков заглушён).
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
