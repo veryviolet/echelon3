@@ -10,7 +10,7 @@ from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
 from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
-from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag
+from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint
 from echelon3 import warncollect
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
@@ -267,6 +267,7 @@ def _train(cfg: DictConfig):
         trainer.train()
     except KeyboardInterrupt:
         # Ctrl-C — штатная остановка, без пугающего traceback.
+        _silence_sigint()  # ПЕРВЫМ: повторный SIGINT не должен увести нас мимо os._exit в finally
         if ddp.is_main():
             print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
             sys.stderr.flush()
@@ -282,6 +283,7 @@ def _train(cfg: DictConfig):
         # кидает RuntimeError 'worker ... killed by signal: Interrupt'. Это прерывание, а не
         # падёж: гасим чисто (exit 130), без страшного traceback/аборта.
         if _looks_like_interrupt(e):
+            _silence_sigint()  # как и в KeyboardInterrupt-ветке: не даём повторному SIGINT сорвать выход
             if ddp.is_main():
                 print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
                 sys.stderr.flush()

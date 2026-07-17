@@ -223,6 +223,23 @@ def _looks_like_interrupt(exc) -> bool:
     return False
 
 
+def _silence_sigint():
+    """Игнорировать повторные Ctrl-C на время shutdown. Зовётся ПЕРВЫМ в обработчике
+    прерывания — до print/flush/close/os._exit.
+
+    Иначе второй SIGINT (elastic-агент повторно шлёт его рангам) снова поднимет
+    KeyboardInterrupt — уже ВНУТРИ нашего обработчика, мимо следующего os._exit(130):
+    управление уйдёт в finally → ddp.shutdown()=destroy_process_group() → NCCL-teardown
+    deadlock → ранг висит ~30с до force-SIGKILL (воркеры добиты PDEATHSIG'ом, семафоры
+    текут). SIG_IGN гарантирует, что путь до os._exit не прервётся. Идемпотентно.
+    signal.signal валиден только в главном потоке — ошибки (напр. вызов из не-main) глушим."""
+    import signal
+    try:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except Exception:
+        pass
+
+
 def _close_quietly(trainer, timeout=15.0):
     """Best-effort graceful teardown DataLoader-воркеров перед выходом: освобождает их
     семафоры и /dev/shm (иначе после жёсткого os._exit их добьёт PDEATHSIG-SIGKILL без

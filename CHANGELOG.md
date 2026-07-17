@@ -4,6 +4,29 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.9.5 — 2026-07-18
+
+### Fixed
+
+- **DDP Ctrl-C no longer hangs ~30s and leaks semaphores when a rank is interrupted
+  a second time mid-shutdown.** After 0.9.4 stopped the abort, a rank that had already
+  entered its interrupt handler (printed `shutting down`) could still hang: the elastic
+  agent re-sends SIGINT to every rank, and that second SIGINT — delivered while inside our
+  `KeyboardInterrupt` handler — re-raised `KeyboardInterrupt` *past* the `os._exit(130)`,
+  landing in the `finally` where `destroy_process_group()` deadlocks on NCCL teardown. The
+  rank then hung until the agent force-`SIGKILL`ed it at the grace period (~30s), which
+  hard-killed the DataLoader workers without releasing their semaphores (`leaked semaphore
+  objects`). The interrupt handlers now set `SIGINT → SIG_IGN` as their very first action
+  (helper `_silence_sigint`, before any print/flush), so the path down to `os._exit(130)`
+  can no longer be diverted; workers are reaped in the bounded window and the rank exits
+  promptly. Only the interrupt path is silenced — the genuine crash path keeps Ctrl-C live.
+
+- **albumentations no longer stalls startup and spams `UserWarning`s trying to fetch
+  version info.** albumentations runs a network version-check on import (`check_version.py`)
+  that, offline, blocks on an SSL handshake timeout and warns every epoch. echelon3 now sets
+  `NO_ALBUMENTATIONS_UPDATE=1` at package import (via `setdefault`, before albumentations is
+  imported), disabling the check; set the env var yourself to override.
+
 ## 0.9.4 — 2026-07-17
 
 ### Fixed

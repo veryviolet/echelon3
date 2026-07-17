@@ -1,8 +1,23 @@
 """_close_quietly гасит воркеров перед жёстким os._exit, но НЕ виснет: если close()
 подвиснет (напр. pin_memory_thread.join без таймаута), выход ограничен timeout'ом."""
+import signal
 import time
 
-from echelon3.cli import _close_quietly
+import pytest
+
+from echelon3.cli import _close_quietly, _silence_sigint
+
+
+@pytest.fixture(autouse=True)
+def _restore_sigint():
+    """_silence_sigint() глобально ставит SIGINT=SIG_IGN. Снимаем снимок до и восстанавливаем
+    после КАЖДОГО теста — иначе состояние протечёт в остальную pytest-сессию (Ctrl-C по
+    зависшему прогону перестанет работать, а тесты на KeyboardInterrupt молча испортятся)."""
+    prev = signal.getsignal(signal.SIGINT)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, prev)
 
 
 def test_close_quietly_is_time_bounded():
@@ -26,6 +41,15 @@ def test_is_sigint_worker_death_matches_only_sigint():
     assert not _is_sigint_worker_death(RuntimeError("worker (pid 4) is killed by signal: Segmentation fault. "))
     assert not _is_sigint_worker_death(RuntimeError("DataLoader worker (pid(s) 5) exited unexpectedly"))
     assert not _is_sigint_worker_death(ValueError("shape mismatch"))
+
+
+def test_silence_sigint_ignores_further_sigint():
+    """_silence_sigint() ставит SIGINT=SIG_IGN, чтобы повторный Ctrl-C в обработчике
+    прерывания не увёл поток мимо os._exit в finally -> ddp.shutdown() ->
+    destroy_process_group() -> NCCL-hang (30с). Восстановление — в autouse-фикстуре."""
+    assert signal.getsignal(signal.SIGINT) != signal.SIG_IGN  # старт: не заглушён
+    _silence_sigint()
+    assert signal.getsignal(signal.SIGINT) == signal.SIG_IGN
 
 
 def test_looks_like_interrupt_flag_gates_ambiguous():
