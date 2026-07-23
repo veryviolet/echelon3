@@ -1003,8 +1003,34 @@
 <p>All notable changes to <strong>echelon3</strong> are documented here. Format follows
 <a href="https://keepachangelog.com/en/1.1.0/">Keep a Changelog</a> loosely; versions
 follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
-<h2 id="096-2026-07-18">0.9.6 — 2026-07-18<a class="headerlink" href="#096-2026-07-18" title="Permanent link">&para;</a></h2>
+<h2 id="0100-2026-07-23">0.10.0 — 2026-07-23<a class="headerlink" href="#0100-2026-07-23" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>MultiDatasetMetric</code> — a metric that spans several validation datasets with a single
+  <code>compute()</code>.</strong> Some metrics need a cross-dataset context that a per-loader metric cannot
+  express — e.g. retrieval, where recall/mAP is defined over a <em>query</em> set matched against a
+  <em>gallery</em> set. A <code>MultiDatasetMetric</code> (in <code>echelon3.metrics</code>) declares the test datasets it
+  spans via <code>self.datasets</code> (typically built in its constructor from roles such as
+  <code>query_dataset</code> / <code>gallery_dataset</code>), and its <code>update(predicted, target, dataset)</code> receives
+  the name of the current batch's source dataset. <code>Trainer.validate()</code> orchestrates it: one
+  <code>reset()</code> before all of the metric's datasets, tagged <code>update()</code>s while iterating the loaders
+  (in the same pass as ordinary metrics — no extra forward), and a single <code>dist_reduce()</code> +
+  <code>compute()</code> after all of them. Ordinary single-dataset metrics are unchanged. <code>keep_best</code>
+  can track a multi-metric by name. The datasets a metric declares must exist among the test
+  loaders and the roster must be non-empty, else validation raises a clear error. Under DDP,
+  <code>dist_reduce()</code> gathers each metric's buffers across ranks (helper <code>all_gather_cat</code>) so
+  <code>compute()</code> sees the full set; the console prints a short <code>Finalizing multi-dataset
+  metrics…</code> / <code>Finalized multi-dataset metrics: …</code> summary after the per-loader lines.</li>
+</ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>All in-code comments and docstrings translated to English.</strong> echelon3 is a public,
+  multi-language package; the source is now uniformly English. No behavior change — the sweep
+  touched only comments/docstrings (and a single informational runtime line in the estimator
+  entry point).</li>
+</ul>
+<h2 id="096-2026-07-18">0.9.6 — 2026-07-18<a class="headerlink" href="#096-2026-07-18" title="Permanent link">&para;</a></h2>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>persistent_workers</code> now defaults to <code>true</code> for the training DataLoader when
   <code>num_workers &gt; 0</code>.</strong> Previously workers were torn down and respawned every epoch; a
@@ -1089,7 +1115,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   pin-memory-thread join is otherwise untimed), reaping the (persistent) workers cleanly.</li>
 </ul>
 <h2 id="091-2026-07-15">0.9.1 — 2026-07-15<a class="headerlink" href="#091-2026-07-15" title="Permanent link">&para;</a></h2>
-<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>dataloaders.*.config.collate_fn</code> can be a component</strong> (<code>module</code>/<code>type</code>/<code>config</code>): the
   engine builds it into a callable and passes it to the DataLoader, instead of leaving a dict
@@ -1098,7 +1124,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   (Used by the docking components in <code>echelon3_zoo[docking]</code>.)</li>
 </ul>
 <h2 id="090-2026-07-15">0.9.0 — 2026-07-15<a class="headerlink" href="#090-2026-07-15" title="Permanent link">&para;</a></h2>
-<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Tabular fit/predict (estimator) trainer family</strong> — a second, independent trainer stack
   next to the image/SGD one, for models that are fit once rather than trained by gradient
@@ -1134,7 +1160,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   checkpoint at step 0; a resumed run prints <code>Initial metrics baseline</code> and re-saves it.)</li>
 </ul>
 <h2 id="086-2026-07-12">0.8.6 — 2026-07-12<a class="headerlink" href="#086-2026-07-12" title="Permanent link">&para;</a></h2>
-<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
+<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Reworked the training / validation console output into clean per-cycle summary
   lines.</strong> The live <code>tqdm</code> bars (<code>Training epoch N …</code>, <code>Evaluating [name] …</code>) are now
@@ -1203,7 +1229,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   <code>device</code> is <code>cpu</code>, so a CPU run stays on CPU.</li>
 </ul>
 <h2 id="080-2026-07-11">0.8.0 — 2026-07-11<a class="headerlink" href="#080-2026-07-11" title="Permanent link">&para;</a></h2>
-<h3 id="changed_2">Changed<a class="headerlink" href="#changed_2" title="Permanent link">&para;</a></h3>
+<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Dropped Hydra; the CLI is now a single <code>echelon3</code> command</strong> with subcommands
   <code>train | finetune | evaluate | export | run</code> (the old <code>echelon3-&lt;cmd&gt;</code> scripts stay
@@ -1246,7 +1272,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   next epoch. The bar is now re-created only when batches remain in the epoch.</li>
 </ul>
 <h2 id="0710-2026-07-10">0.7.10 — 2026-07-10<a class="headerlink" href="#0710-2026-07-10" title="Permanent link">&para;</a></h2>
-<h3 id="changed_3">Changed<a class="headerlink" href="#changed_3" title="Permanent link">&para;</a></h3>
+<h3 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>DDP launcher messages now print after the banner and in the same colour.</strong> The
   <code>--&gt; DDP: launching …</code> / dataloader-RAM / warning lines are emitted by the parent
@@ -1283,7 +1309,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   are unchanged.</li>
 </ul>
 <h2 id="077-2026-07-08">0.7.7 — 2026-07-08<a class="headerlink" href="#077-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Metric.dist_reduce()</code> hook — exact custom-metric aggregation under DDP.</strong>
   Validation is sharded per rank; torchmetrics reduce their state inside <code>compute()</code>,
@@ -1297,7 +1323,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   torchmetrics are unaffected.</li>
 </ul>
 <h2 id="076-2026-07-08">0.7.6 — 2026-07-08<a class="headerlink" href="#076-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="changed_4">Changed<a class="headerlink" href="#changed_4" title="Permanent link">&para;</a></h3>
+<h3 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>The per-component <code>config:</code> block is now optional everywhere, uniformly.</strong> One
   rule across every <code>create_*</code> (net, backbone, dataset, loss, metric, optimizer,
@@ -1334,7 +1360,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   which pickles cleanly; <code>spawn</code> works again with worker reaping intact.</li>
 </ul>
 <h2 id="074-2026-07-08">0.7.4 — 2026-07-08<a class="headerlink" href="#074-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="changed_5">Changed<a class="headerlink" href="#changed_5" title="Permanent link">&para;</a></h3>
+<h3 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Revert the per-component <code>config:</code>-block optionality added in 0.7.3: <code>net</code>,
   datasets, and schedulers require their <code>config:</code> block again (as before 0.7.3).
@@ -1345,7 +1371,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   <code>keep_best_on</code>) is unchanged.</li>
 </ul>
 <h2 id="073-2026-07-08">0.7.3 — 2026-07-08<a class="headerlink" href="#073-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="changed_6">Changed<a class="headerlink" href="#changed_6" title="Permanent link">&para;</a></h3>
+<h3 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>CLI output is now uniformly English and single-colour.</strong> A handful of runtime
   messages (and raised errors) were Russian and/or highlighted in yellow, which
@@ -1404,14 +1430,14 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   (<code>ranks × num_workers × prefetch_factor</code>) and warns when it is large — these are
   <strong>per-rank</strong> and multiply under DDP, the common cause of the OOM above.</li>
 </ul>
-<h3 id="changed_7">Changed<a class="headerlink" href="#changed_7" title="Permanent link">&para;</a></h3>
+<h3 id="changed_8">Changed<a class="headerlink" href="#changed_8" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>torch.compile</code> is no longer marked experimental</strong> — validated on single-GPU
   and 4×H200 DDP including production image-in-image runs. The <code>compile</code> /
   <code>compile_mode</code> knobs are unchanged.</li>
 </ul>
 <h2 id="070-2026-07-08">0.7.0 — 2026-07-08<a class="headerlink" href="#070-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
+<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>torch.compile</code> support (experimental, opt-in).</strong> <code>trainer.config.compile: true</code>
   (with optional <code>compile_mode</code>) compiles the network — kernel fusion to cut launch
@@ -1423,7 +1449,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   round-trip). The actual speedup and any shape-driven recompiles are
   model-dependent (see <code>guide/ddp.md</code>).</li>
 </ul>
-<h3 id="changed_8">Changed<a class="headerlink" href="#changed_8" title="Permanent link">&para;</a></h3>
+<h3 id="changed_9">Changed<a class="headerlink" href="#changed_9" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>PairTrainer</code> calls the network positionally</strong> — <code>net(base, query, True)</code>
   instead of <code>net(base, query, return_features=True)</code>. Pair nets name the third
@@ -1431,7 +1457,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
   by position keeps the trainer agnostic to the name.</li>
 </ul>
 <h2 id="060-2026-07-08">0.6.0 — 2026-07-08<a class="headerlink" href="#060-2026-07-08" title="Permanent link">&para;</a></h2>
-<h3 id="added_4">Added<a class="headerlink" href="#added_4" title="Permanent link">&para;</a></h3>
+<h3 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>Trainer.compute_losses(source, labels, net=None)</code> — an extension seam for
   the forward pass and loss routing.</strong> It runs inside the trainer's autocast and
@@ -1472,7 +1498,7 @@ follow <a href="https://semver.org/">SemVer</a> once 1.0.0 ships.</p>
 <h2 id="050-2026-07-08">0.5.0 — 2026-07-08<a class="headerlink" href="#050-2026-07-08" title="Permanent link">&para;</a></h2>
 <p>Multi-GPU and performance release. <strong>Breaking</strong>: DataParallel is gone and mixed
 precision defaults to bf16.</p>
-<h3 id="changed_9">Changed<a class="headerlink" href="#changed_9" title="Permanent link">&para;</a></h3>
+<h3 id="changed_10">Changed<a class="headerlink" href="#changed_10" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Multi-GPU is built-in DDP, launched from the CLI — no <code>torchrun</code> needed.</strong>
   Pass <code>gpus=[0,1,2,3]</code> (a root config key; default = all visible GPUs on the
@@ -1505,7 +1531,7 @@ precision defaults to bf16.</p>
   when there are classes to ignore. Verified end to end — a <code>Segmenter</code> smoke on
   synthetic masks moves mIoU from ~0.85 to ~0.96.</li>
 </ul>
-<h3 id="added_5">Added<a class="headerlink" href="#added_5" title="Permanent link">&para;</a></h3>
+<h3 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>examples/segmentation/</code>: a self-contained semantic-segmentation smoke
   (synthetic image/mask generator, a tiny dependency-free backbone, a <code>Segmenter</code></li>
@@ -1533,7 +1559,7 @@ precision defaults to bf16.</p>
 <li>Class labels are coerced to integer tensors in both the encoder and the mAP
     metric (Albumentations round-trips them through float arrays).</li>
 </ul>
-<h3 id="added_6">Added<a class="headerlink" href="#added_6" title="Permanent link">&para;</a></h3>
+<h3 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>detection</code> extra (<code>faster-coco-eval</code>) — the <code>mAP</code> metric needs a COCO backend;
   <code>mAP</code> takes an optional <code>backend</code> argument (default <code>faster_coco_eval</code>).</li>
@@ -1542,7 +1568,7 @@ precision defaults to bf16.</p>
   that trains, validates (mAP rises above zero) and checkpoints on CPU or GPU.</li>
 </ul>
 <h2 id="031-2026-07-07">0.3.1 — 2026-07-07<a class="headerlink" href="#031-2026-07-07" title="Permanent link">&para;</a></h2>
-<h3 id="added_7">Added<a class="headerlink" href="#added_7" title="Permanent link">&para;</a></h3>
+<h3 id="added_8">Added<a class="headerlink" href="#added_8" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Full MkDocs (Material) documentation site published to GitHub Pages at
   <a href="https://veryviolet.github.io/echelon3/">https://veryviolet.github.io/echelon3/</a>: getting-started, concepts
@@ -1552,7 +1578,7 @@ precision defaults to bf16.</p>
 <li><code>[project.urls]</code> with a <code>Documentation</code> link, so PyPI shows it.</li>
 </ul>
 <h2 id="030-2026-07-05">0.3.0 — 2026-07-05<a class="headerlink" href="#030-2026-07-05" title="Permanent link">&para;</a></h2>
-<h3 id="added_8">Added<a class="headerlink" href="#added_8" title="Permanent link">&para;</a></h3>
+<h3 id="added_9">Added<a class="headerlink" href="#added_9" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>echelon3-finetune</code> CLI: warm-start from a checkpoint (<code>init_from</code>), freezing
   by regex patterns (<code>finetune.freeze_patterns</code>), head-only training and
@@ -1560,7 +1586,7 @@ precision defaults to bf16.</p>
   blocks present it behaves exactly like <code>echelon3-train</code>.</li>
 </ul>
 <h2 id="020-2026-07-05">0.2.0 — 2026-07-05<a class="headerlink" href="#020-2026-07-05" title="Permanent link">&para;</a></h2>
-<h3 id="added_9">Added<a class="headerlink" href="#added_9" title="Permanent link">&para;</a></h3>
+<h3 id="added_10">Added<a class="headerlink" href="#added_10" title="Permanent link">&para;</a></h3>
 <ul>
 <li>ONNX export: <code>ModelExporter</code> base + <code>OnnxExporter</code>
   (preprocess → net → postprocess wrapped into a single graph),
@@ -1578,7 +1604,7 @@ precision defaults to bf16.</p>
 <h2 id="010-2026-07-05">0.1.0 — 2026-07-05<a class="headerlink" href="#010-2026-07-05" title="Permanent link">&para;</a></h2>
 <p>First public release. Core of the framework extracted from the internal
 echelon2 codebase and cleaned up:</p>
-<h3 id="added_10">Added<a class="headerlink" href="#added_10" title="Permanent link">&para;</a></h3>
+<h3 id="added_11">Added<a class="headerlink" href="#added_11" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Config-driven component factory (<code>echelon3.creator</code>): every component is a
   <code>module</code> / <code>type</code> / <code>config</code> YAML triple resolved by dynamic import, with a
