@@ -25,15 +25,16 @@ from echelon3.mlops.basic import MLOpsLogger
 from echelon3 import ddp
 from echelon3 import runtime
 from echelon3 import warncollect
+from echelon3.metrics.base import MultiDatasetMetric
 
 
 def _fmt_metric(v) -> str:
-    """Метрику/лосс → компактное число для однострочного вывода.
+    """Metric/loss → compact number for single-line output.
 
-    Адаптивно: обычные значения — до 4 знаков без хвостовых нулей (``0.0161``,
-    ``222.344``), очень мелкие/крупные — научная запись (``8.070e-05``, ``5.400e+06``).
-    Без этого в консоль попадал repr тензора (``tensor(0.0161, device='cuda:0')``):
-    строка раздувалась, переполняла терминал и tqdm оставлял обрывки бара."""
+    Adaptive: ordinary values — up to 4 digits with trailing zeros stripped (``0.0161``,
+    ``222.344``), very small/large ones — scientific notation (``8.070e-05``, ``5.400e+06``).
+    Without this the console got the tensor repr (``tensor(0.0161, device='cuda:0')``):
+    the string ballooned, overflowed the terminal, and tqdm left dangling bar fragments."""
     if isinstance(v, torch.Tensor):
         v = v.detach()
         if v.numel() != 1:
@@ -50,7 +51,7 @@ def _fmt_metric(v) -> str:
 
 
 class _NullLogger:
-    """Заглушка mlops-логгера для не-главных DDP-ранков."""
+    """Stub mlops logger for non-main DDP ranks."""
 
     def __getattr__(self, name):
         return lambda *args, **kwargs: None
@@ -59,8 +60,8 @@ class _NullLogger:
 class Trainer:
     _train_loader: DataLoader = None
     _test_loader: DataLoader = None
-    _test_loaders: Dict[str, DataLoader] = None  # несколько test‑датасетов
-    _primary_test_name: str | None = None        # основной тест‑датасет (по умолчанию "test")
+    _test_loaders: Dict[str, DataLoader] = None  # several test datasets
+    _primary_test_name: str | None = None        # primary test dataset (defaults to "test")
 
     _net: torch.nn.Module = None
     _losses: Dict[str, torch.nn.Module] = None
@@ -123,16 +124,16 @@ class Trainer:
         **kwargs,
     ):
         """
-        keep_best_on может быть:
-          * строкой / списком имён (старый режим)
-          * словарём:
+        keep_best_on can be:
+          * a string / list of names (legacy mode)
+          * a dict:
               keep_best_on:
                 accuracy:
                   mode: directional
                   value: high      # high / low
                 accuracy_control:
                   mode: tolerance
-                  value: 0.1%      # или 0.001
+                  value: 0.1%      # or 0.001
                   direction: high  # low / high
 
         metrics_on:
@@ -141,7 +142,7 @@ class Trainer:
         """
         self._train_loader = train_dataloader
 
-        # --- поддержка нескольких test‑датасетов при обратной совместимости ---
+        # --- support for several test datasets with backward compatibility ---
         if isinstance(test_dataloader, dict):
             self._test_loaders = dict(test_dataloader)
             self._primary_test_name = next(iter(self._test_loaders.keys()), None)
@@ -171,20 +172,20 @@ class Trainer:
                       "first steps recompile (warmup)")
 
         if ddp.is_ddp():
-            # DDP: один процесс = один GPU (сеть уже на устройстве).
-            # find_unused_parameters=True по умолчанию: у некоторых сетей часть
-            # выходов может не участвовать в лоссе на отдельных шагах.
+            # DDP: one process = one GPU (the net is already on the device).
+            # find_unused_parameters=True by default: on some nets part of the
+            # outputs may not participate in the loss on individual steps.
             self._net = torch.nn.parallel.DistributedDataParallel(
                 net,
                 device_ids=[device.index] if device.type == "cuda" else None,
                 find_unused_parameters=bool(kwargs.get("ddp_find_unused_parameters", True)),
             )
         else:
-            # Один GPU / CPU — без обёртки. DataParallel убран; несколько GPU
-            # запускаются встроенным DDP-лаунчером (см. cli.maybe_launch_ddp),
-            # т.е. в каждом процессе сеть одноустройственная.
+            # Single GPU / CPU — no wrapper. DataParallel was removed; multiple GPUs
+            # are launched by the built-in DDP launcher (see cli.maybe_launch_ddp),
+            # i.e. within each process the net is single-device.
             self._net = net
-        self._eval_net = None  # развёрнутая сеть для rank0-валидации в DDP
+        self._eval_net = None  # unwrapped net for rank0 validation in DDP
         self._losses = losses
         self._metrics = metrics
         self._optimizer = optimizer
@@ -194,18 +195,18 @@ class Trainer:
         self._high_is_better = high_is_better
         self._times_to_validate_per_epoch = times_to_validate_per_epoch
         self._ckpt_manager = ckpt_manager
-        # Логирует только rank 0 (в DDP не-главные ранки получают заглушку).
+        # Only rank 0 logs (in DDP non-main ranks get a stub).
         self._logger = mlops_logger if (mlops_logger is not None and ddp.is_main()) \
             else _NullLogger()
         self._metrics = {name: m.to(self._device) for name, m in self._metrics.items()}
         self._float_labels = float_labels
         self._reset = reset
 
-        # --- mixed precision (AMP) --- привязано к фактическому устройству.
+        # --- mixed precision (AMP) --- bound to the actual device.
         self._amp_dtype = runtime.resolve_amp_dtype(kwargs.get("precision", "auto"), device=self._device)
-        # fp16 требует GradScaler, а он не сочетается с closure-оптимизаторами
-        # (SAM/LBFGS сами делают двойной backward + ручную арифметику градиентов);
-        # откатываемся на bf16.
+        # fp16 requires a GradScaler, which is incompatible with closure optimizers
+        # (SAM/LBFGS do a double backward + manual gradient arithmetic themselves);
+        # we fall back to bf16.
         if self._amp_dtype == torch.float16 and self._optimizer_uses_closure():
             bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
             self._amp_dtype = torch.bfloat16 if bf16_ok else None
@@ -213,7 +214,7 @@ class Trainer:
                 print(f"--> AMP: fp16 with {type(self._optimizer).__name__} (closure optimizer) "
                       f"is unsupported; using {runtime.precision_label(self._amp_dtype)}")
         self._amp_enabled = self._amp_dtype is not None
-        # dtype для autocast; когда AMP выключен — значение игнорируется (enabled=False).
+        # dtype for autocast; when AMP is off the value is ignored (enabled=False).
         self._autocast_dtype = self._amp_dtype if self._amp_enabled else torch.bfloat16
         self._scaler = torch.amp.GradScaler("cuda", enabled=(self._amp_dtype == torch.float16))
         if ddp.is_main():
@@ -223,7 +224,7 @@ class Trainer:
                 print("--> AMP on: numerics differ from fp32 runs "
                       "(set precision: fp32 to disable)")
 
-        # metrics_on может прийти как DictConfig/Mapping
+        # metrics_on may arrive as a DictConfig/Mapping
         raw_metrics_on = kwargs.get("metrics_on", None)
         if raw_metrics_on is None:
             self._metrics_on = None
@@ -232,10 +233,10 @@ class Trainer:
         else:
             self._metrics_on = raw_metrics_on
 
-        # нормализованный конфиг keep_best_on
+        # normalized keep_best_on config
         self._keep_best_config = self._build_keep_best_config(keep_best_on)
 
-        # текущее и лучшее значения ВСЕХ отслеживаемых метрик
+        # current and best values of ALL tracked metrics
         self._current_metrics_all: Dict[str, float] | None = None
         self._best_metrics_all: Dict[str, float] | None = None
 
@@ -258,11 +259,11 @@ class Trainer:
             self.recalculate_start_of_epoch_global_step()
             self.initialize_network()
 
-        # Начальная валидация ДО обучения — одинаково для scratch и для чекпойнта:
-        # это initial baseline (метрики на шаге 0 / загруженного чекпойнта), а НЕ
-        # замер после куска первой эпохи. validate_and_check_for_saving() сам зовёт
-        # validate(), печатает «Initial metrics baseline …» (best ещё None) и
-        # сохраняет baseline-чекпойнт, который дальнейшее обучение должно побить.
+        # Initial validation BEFORE training — the same for scratch and for a checkpoint:
+        # this is the initial baseline (metrics at step 0 / of the loaded checkpoint), NOT
+        # a measurement after part of the first epoch. validate_and_check_for_saving() itself
+        # calls validate(), prints "Initial metrics baseline …" (best is still None) and
+        # saves the baseline checkpoint that further training must beat.
         self.prepare_network_for_validation()
         self.validate_and_check_for_saving()
         self.prepare_network_for_train()
@@ -302,9 +303,9 @@ class Trainer:
         return name in ("SAMOptimizer", "LBFGS")
 
     def close(self):
-        """Graceful shutdown: сразу гасит воркеров даталоадеров (persistent_workers
-        держат их живыми между эпохами), освобождая /dev/shm и RAM на чистом выходе,
-        не дожидаясь GC. Штатно PDEATHSIG всё равно убьёт их вместе с процессом."""
+        """Graceful shutdown: immediately kills the dataloader workers (persistent_workers
+        keep them alive between epochs), freeing /dev/shm and RAM on a clean exit,
+        without waiting for GC. Normally PDEATHSIG would kill them along with the process anyway."""
         loaders = [self._train_loader] + list(self._test_loaders.values())
         for loader in loaders:
             try:
@@ -351,7 +352,7 @@ class Trainer:
                 total_loss = torch.sum(
                     torch.stack([ls[0] * ls[1] for ls in losses_values.values()])
                 )
-            # backward — вне autocast; при fp16 масштабируем градиенты скейлером.
+            # backward — outside autocast; for fp16 we scale gradients with the scaler.
             if self._scaler.is_enabled():
                 self._scaler.scale(total_loss).backward()
             else:
@@ -362,8 +363,8 @@ class Trainer:
             return total_loss
 
         if self._optimizer_uses_closure():
-            # SAM/LBFGS: scaler всегда выключен (fp16 откатывается на bf16), поэтому
-            # двойной forward/backward внутри closure идёт как раньше.
+            # SAM/LBFGS: the scaler is always off (fp16 falls back to bf16), so the
+            # double forward/backward inside the closure works as before.
             self._optimizer.step(closure)
         else:
             _ = closure()
@@ -383,8 +384,8 @@ class Trainer:
         self._net.train(False)
 
     def train_epoch(self):
-        # len(DataLoader) корректен и для DDP (шард DistributedSampler), и без него
-        # (эквивалентен ceil(dataset/batch)); фолбэк — для кастомных лоадеров.
+        # len(DataLoader) is correct both for DDP (a DistributedSampler shard) and without it
+        # (equivalent to ceil(dataset/batch)); the fallback is for custom loaders.
         try:
             total_batches = len(self._train_loader)
         except TypeError:
@@ -404,10 +405,10 @@ class Trainer:
             desc=f"--> Training epoch {self._current_epoch}",
             ncols=0,
             dynamic_ncols=True,
-            leave=False,   # живой бар стираем; итог — строкой «Trained …» ниже
+            leave=False,   # erase the live bar; the summary is the "Trained …" line below
             disable=not ddp.is_main(),
         )
-        self._last_trained_batch = -1   # антидубль строки «Trained …» за эпоху
+        self._last_trained_batch = -1   # dedup guard for the "Trained …" line per epoch
 
         self.prepare_network_for_train()
         self.recalculate_start_of_epoch_global_step()
@@ -443,10 +444,10 @@ class Trainer:
                 self.validate_and_check_for_saving()
                 self.prepare_network_for_train()
 
-                # Новый бар — только если в эпохе ЕЩЁ остались батчи. На последней
-                # итерации (T=1: валидация в конце эпохи) эпоха уже завершена, и
-                # пересоздание давало паразитную строку «Training epoch N» уже ПОСЛЕ
-                # «Evaluating» (перед «Training epoch N+1»).
+                # A new bar — only if there are STILL batches left in the epoch. On the last
+                # iteration (T=1: validation at the end of the epoch) the epoch is already done, and
+                # recreating it produced a spurious "Training epoch N" line AFTER
+                # "Evaluating" (before "Training epoch N+1").
                 if batch + 1 < total_batches:
                     train_progress = tqdm(
                         initial=batch + 1,
@@ -464,9 +465,9 @@ class Trainer:
             self._scheduler.step()
 
     def _log_trained(self, batches_done: int, total_batches: int):
-        """Итоговая строка на каждый закрытый train-бар (он leave=False, стёрся):
-        докуда дошли в эпохе, текущий lr и последние лоссы. Печатаем один раз на
-        достигнутый батч (антидубль — конец эпохи мог совпасть с валидацией)."""
+        """Summary line for every closed train bar (it is leave=False, so it was erased):
+        how far we got in the epoch, the current lr and the latest losses. Printed once per
+        reached batch (dedup — the end of the epoch may coincide with validation)."""
         if not ddp.is_main() or batches_done == self._last_trained_batch:
             return
         self._last_trained_batch = batches_done
@@ -481,14 +482,14 @@ class Trainer:
         )
 
     # =========================
-    #   ЛОГИКА KEEP_BEST_ON
+    #   KEEP_BEST_ON LOGIC
     # =========================
 
     def _build_keep_best_config(self, keep_best_on):
         if keep_best_on is None:
             return None
 
-        # словарь / Mapping (включая DictConfig)
+        # dict / Mapping (including DictConfig)
         if isinstance(keep_best_on, Mapping):
             cfg = {}
             for name, v in keep_best_on.items():
@@ -504,7 +505,7 @@ class Trainer:
                 cfg[str(name)] = {"mode": mode, "value": value, "direction": direction}
             return cfg
 
-        # строка / список имён: directional high/low по high_is_better
+        # string / list of names: directional high/low based on high_is_better
         names = self._normalize_keep_best_names(keep_best_on)
         direction = "high" if self._high_is_better else "low"
         return {
@@ -599,15 +600,15 @@ class Trainer:
     def validate_and_check_for_saving(self):
         self.validate()
 
-        # После dist-синка метрик значения идентичны на всех ранках — keep-best
-        # логика исполняется везде одинаково, сохранение гейтится в save_checkpoint.
+        # After the dist sync of metrics the values are identical on all ranks — the keep-best
+        # logic runs the same everywhere, and saving is gated in save_checkpoint.
 
-        # если keep_best_on не задан — сохраняем каждый раз
+        # if keep_best_on is not set — save every time
         if self._keep_best_config is None or not self._keep_best_config:
             self.save_checkpoint()
             return
 
-        # первая итерация: считаем текущие значения лучшими и сохраняем
+        # first iteration: treat the current values as best and save
         if self._best_metrics_all is None:
             self._best_metrics_all = (
                 dict(self._current_metrics_all)
@@ -629,7 +630,7 @@ class Trainer:
             self.save_checkpoint()
             return
 
-        # проверяем одновременное "улучшение" по всем условиям
+        # check for simultaneous "improvement" across all conditions
         if self._all_metrics_improved():
             self._best_metrics_all = (
                 dict(self._current_metrics_all)
@@ -655,7 +656,7 @@ class Trainer:
         net = self._eval_net if self._eval_net is not None else self._net
         with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
             predictions, losses_values = self.compute_losses(source, labels, net=net)
-        # Метрики считаем на fp32: после autocast выходы могут быть bf16/fp16.
+        # Compute metrics in fp32: after autocast the outputs may be bf16/fp16.
         predictions = runtime.to_float32(predictions)
         self._logger.log_test_data(self._global_step, source, labels, predictions)
         return predictions, losses_values
@@ -699,30 +700,57 @@ class Trainer:
 
     def validate(self):
         """
-        Поддерживает:
-          * один test_loader (старый режим),
-          * несколько test_loaders (новый режим: dict[name -> DataLoader]).
+        Supports:
+          * a single test_loader (legacy mode),
+          * several test_loaders (new mode: dict[name -> DataLoader]).
 
         metrics_on:
-          - если не задано -> считаем все метрики на всех датасетах;
-          - если задано -> каждая метрика считается только на своём датасете.
+          - if not set -> compute all metrics on all datasets;
+          - if set -> each metric is computed only on its own dataset.
         """
-        # Краткое саммари накопленных предупреждений перед валидацией (rank 0),
-        # чтобы они не терялись в глухом режиме и не рвали прогрессбар.
+        # A brief summary of accumulated warnings before validation (rank 0),
+        # so they are not lost in quiet mode and do not break the progress bar.
         if ddp.is_main():
             warncollect.flush()
 
         if not self._test_loaders:
             return
 
-        # DDP: валидация СИММЕТРИЧНА — все ранки прогоняют свой шард теста
-        # (DistributedSampler в creator) развёрнутой сетью (без DDP-коллективов в
-        # forward), а torchmetrics сам агрегирует состояния между ранками на
-        # compute() (dist_reduce_fx="sum"). Никаких barrier/веток по рангу —
-        # прошлая асимметричная схема (rank 0 считает, остальные ждут) давала
-        # рассинхрон очередей NCCL-коллективов и вешала ран.
+        # DDP: validation is SYMMETRIC — every rank runs its own test shard
+        # (DistributedSampler in the creator) with the unwrapped net (no DDP collectives in
+        # forward), and torchmetrics itself aggregates state across ranks on
+        # compute() (dist_reduce_fx="sum"). No barriers/per-rank branches —
+        # the previous asymmetric scheme (rank 0 computes, the rest wait) caused
+        # desync of the NCCL collective queues and hung the run.
         if ddp.is_ddp():
             self._eval_net = ddp.unwrap(self._net)
+
+        # Two families of metrics. A plain Metric is computed within a SINGLE loader
+        # (reset->update->compute inside its loop). A MultiDatasetMetric spans several
+        # loaders at once and is computed ONCE after iterating over all of them (e.g.
+        # retrieval: queries+gallery) — it has its own orchestration below.
+        single_metrics = {n: m for n, m in self._metrics.items()
+                          if not isinstance(m, MultiDatasetMetric)}
+        multi_metrics = {n: m for n, m in self._metrics.items()
+                         if isinstance(m, MultiDatasetMetric)}
+
+        # Guard: a multi-metric must declare a non-empty dataset roster, and every declared
+        # dataset must be among the test loaders. Otherwise update() never fires (loader_name
+        # is never `in` an empty/mismatched roster) and compute() silently runs over empty
+        # buffers — a garbage value could then drive keep_best/checkpointing with no error.
+        for mname, mm in multi_metrics.items():
+            declared = list(getattr(mm, "datasets", []) or [])
+            if not declared:
+                raise ValueError(
+                    f"MultiDatasetMetric '{mname}' declares no datasets (empty `datasets`). "
+                    f"Set them in the metric (e.g. from query_dataset/gallery_dataset). "
+                    f"Available test loaders: {list(self._test_loaders.keys())}.")
+            missing = [d for d in declared if self._test_loaders.get(d) is None]
+            if missing:
+                raise ValueError(
+                    f"MultiDatasetMetric '{mname}' declares datasets {declared}, "
+                    f"but they are missing (or None) among the test loaders: {missing}. "
+                    f"Available: {list(self._test_loaders.keys())}.")
 
         metrics_routing: Dict[str, set] | None = None
         if isinstance(self._metrics_on, Mapping) and len(self._metrics_on) > 0:
@@ -730,9 +758,16 @@ class Trainer:
             for metric_name, ds_name in self._metrics_on.items():
                 if ds_name is None:
                     continue
+                if metric_name in multi_metrics:      # multi-metrics declare their own datasets
+                    continue
                 if ds_name not in self._test_loaders:
                     continue
                 metrics_routing.setdefault(ds_name, set()).add(metric_name)
+
+        # Multi-metrics: reset ONCE before iterating over all of their datasets.
+        for mm in multi_metrics.values():
+            mm.reset()
+        multi_metrics_values: Dict[str, float] = {}
 
         metrics_all_loaders: Dict[str, Dict[str, float]] = {}
         loss_metrics_all_loaders: Dict[str, Dict[str, float]] = {}
@@ -745,15 +780,15 @@ class Trainer:
                 if metrics_routing is not None:
                     active_metric_names = metrics_routing.get(loader_name, set())
                     metrics_for_loader = {
-                        name: m for name, m in self._metrics.items()
+                        name: m for name, m in single_metrics.items()
                         if name in active_metric_names
                     }
                 else:
-                    metrics_for_loader = dict(self._metrics)
+                    metrics_for_loader = dict(single_metrics)
 
                 sampler = getattr(loader, "sampler", None)
                 if isinstance(sampler, torch.utils.data.distributed.DistributedSampler):
-                    total_size = len(sampler)  # шард этого ранка
+                    total_size = len(sampler)  # this rank's shard
                 else:
                     total_size = len(loader.dataset)
 
@@ -763,7 +798,7 @@ class Trainer:
                     desc=f"--> Evaluating [{loader_name}]",
                     ncols=0,
                     dynamic_ncols=True,
-                    leave=False,   # живой бар стираем; итог — строкой «Evaluated …»
+                    leave=False,   # erase the live bar; the summary is the "Evaluated …" line
                     disable=not ddp.is_main(),
                 )
 
@@ -794,6 +829,13 @@ class Trainer:
                                 preds_for_metric = preds_for_metric.squeeze()
                         m.update(preds_for_metric, labels)
 
+                    # MultiDatasetMetric whose roster includes the current loader: accumulate
+                    # with the source tag (compute happens later, after all datasets). Pass raw
+                    # predictions/labels — the metric owns any reshaping (e.g. embeddings).
+                    for mm in multi_metrics.values():
+                        if loader_name in getattr(mm, "datasets", []):
+                            mm.update(predictions, labels, dataset=loader_name)
+
                     if isinstance(source, list):
                         batch_size = source[0].size(0) if isinstance(
                             source[0], torch.Tensor
@@ -805,11 +847,11 @@ class Trainer:
 
                     train_progress.update(batch_size)
 
-                # DDP: свести распределённое состояние кастомных метрик по рангам
-                # ПЕРЕД compute() (валидация шардирована через DistributedSampler).
-                # Коллектив — зовём на ВСЕХ рангах симметрично. torchmetrics
-                # (loss_metrics и torchmetrics-метрики) сводятся сами; кастомные
-                # Metric — через свой dist_reduce (база — no-op).
+                # DDP: reduce the distributed state of custom metrics across ranks
+                # BEFORE compute() (validation is sharded via DistributedSampler).
+                # The collective is called on ALL ranks symmetrically. torchmetrics
+                # (loss_metrics and torchmetrics metrics) reduce themselves; custom
+                # Metric objects — via their own dist_reduce (the base is a no-op).
                 if ddp.is_ddp():
                     for m in metrics_for_loader.values():
                         dr = getattr(m, "dist_reduce", None)
@@ -819,9 +861,9 @@ class Trainer:
                 loss_metrics_values = {k: m.compute() for k, m in loss_metrics.items()}
                 metrics_values = {k: m.compute() for k, m in metrics_for_loader.items()}
 
-                # Живой бар (leave=False) стёрся; печатаем одну итоговую строку —
-                # прошедшее время «Evaluated», лоссы+метрики компактными числами
-                # (не tensor(..., device='cuda:0'), иначе строка переполняет терминал).
+                # The live bar (leave=False) was erased; print one summary line —
+                # elapsed time "Evaluated", losses+metrics as compact numbers
+                # (not tensor(..., device='cuda:0'), otherwise the string overflows the terminal).
                 train_progress.close()
                 if ddp.is_main():
                     summary = {**loss_metrics_values, **metrics_values}
@@ -842,10 +884,40 @@ class Trainer:
                     for k, v in loss_metrics_values.items()
                 }
 
-        # ---- формируем словарь отслеживаемых метрик с учётом metrics_on ----
+            # ---- MultiDatasetMetric: finalize after iterating over ALL datasets ----
+            # One dist_reduce + one compute per metric (not per loader). Ordinary metrics
+            # are already fully computed above; this only runs the cross-dataset step.
+            if multi_metrics:
+                if ddp.is_main():
+                    tqdm.write("--> Finalizing multi-dataset metrics...")
+                if ddp.is_ddp():
+                    # Gather each metric's buffers across ranks BEFORE compute — symmetric
+                    # on all ranks (each saw only its DistributedSampler shard per dataset).
+                    for mm in multi_metrics.values():
+                        dr = getattr(mm, "dist_reduce", None)
+                        if callable(dr):
+                            dr()
+                for mname, mm in multi_metrics.items():
+                    val = mm.compute()
+                    multi_metrics_values[mname] = (
+                        float(val.detach().cpu()) if isinstance(val, torch.Tensor) else float(val)
+                    )
+                self._logger.log_test_metrics(
+                    self._global_step,
+                    {f"multi/{k}": v for k, v in multi_metrics_values.items()},
+                )
+                if ddp.is_main() and multi_metrics_values:
+                    parts = ", ".join(f"{k}={_fmt_metric(v)}"
+                                      for k, v in multi_metrics_values.items())
+                    tqdm.write(f"--> Finalized multi-dataset metrics: {parts}")
+
+        # ---- build the tracked-metrics dict honouring metrics_on ----
         if self._keep_best_config is not None and len(self._keep_best_config) > 0:
             current: Dict[str, float] = {}
             for name in self._keep_best_config.keys():
+                if name in multi_metrics_values:      # cross-dataset metric — looked up by name
+                    current[name] = multi_metrics_values[name]
+                    continue
                 ds_name = None
                 if isinstance(self._metrics_on, Mapping):
                     ds_name = self._metrics_on.get(name, None)
@@ -867,7 +939,7 @@ class Trainer:
         else:
             self._current_metrics_all = None
 
-        # ---- legacy _metric_to_track (для одного ключа и одного датасета) ----
+        # ---- legacy _metric_to_track (single key, single dataset) ----
         key_for_legacy = None
         if self._keep_best_config is not None and len(self._keep_best_config) > 0:
             key_for_legacy = next(iter(self._keep_best_config.keys()))
@@ -875,23 +947,26 @@ class Trainer:
             key_for_legacy = self._keep_best_on
 
         if key_for_legacy is not None:
-            ds_name = None
-            if isinstance(self._metrics_on, Mapping):
-                ds_name = self._metrics_on.get(key_for_legacy, None)
-            if ds_name is None:
-                ds_name = self._primary_test_name
-
             value_for_legacy = None
-            if (
-                ds_name in metrics_all_loaders
-                and key_for_legacy in metrics_all_loaders[ds_name]
-            ):
-                value_for_legacy = metrics_all_loaders[ds_name][key_for_legacy]
-            elif (
-                ds_name in loss_metrics_all_loaders
-                and key_for_legacy in loss_metrics_all_loaders[ds_name]
-            ):
-                value_for_legacy = loss_metrics_all_loaders[ds_name][key_for_legacy]
+            if key_for_legacy in multi_metrics_values:      # cross-dataset metric — by name
+                value_for_legacy = multi_metrics_values[key_for_legacy]
+            else:
+                ds_name = None
+                if isinstance(self._metrics_on, Mapping):
+                    ds_name = self._metrics_on.get(key_for_legacy, None)
+                if ds_name is None:
+                    ds_name = self._primary_test_name
+
+                if (
+                    ds_name in metrics_all_loaders
+                    and key_for_legacy in metrics_all_loaders[ds_name]
+                ):
+                    value_for_legacy = metrics_all_loaders[ds_name][key_for_legacy]
+                elif (
+                    ds_name in loss_metrics_all_loaders
+                    and key_for_legacy in loss_metrics_all_loaders[ds_name]
+                ):
+                    value_for_legacy = loss_metrics_all_loaders[ds_name][key_for_legacy]
 
             if value_for_legacy is not None:
                 self._metric_to_track = value_for_legacy
@@ -903,7 +978,7 @@ class Trainer:
 
     def load_from_checkpoint(self):
         ckpt, num = self._ckpt_manager.load_latest_checkpoint()
-        # Снимает устаревший префикс 'module.' (старые DataParallel/DDP-чекпоинты).
+        # Strips the obsolete 'module.' prefix (old DataParallel/DDP checkpoints).
         ddp.load_state_dict_flexible(self._net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
         if self._reset:

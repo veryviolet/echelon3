@@ -4,6 +4,33 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.0 — 2026-07-23
+
+### Added
+
+- **`MultiDatasetMetric` — a metric that spans several validation datasets with a single
+  `compute()`.** Some metrics need a cross-dataset context that a per-loader metric cannot
+  express — e.g. retrieval, where recall/mAP is defined over a *query* set matched against a
+  *gallery* set. A `MultiDatasetMetric` (in `echelon3.metrics`) declares the test datasets it
+  spans via `self.datasets` (typically built in its constructor from roles such as
+  `query_dataset` / `gallery_dataset`), and its `update(predicted, target, dataset)` receives
+  the name of the current batch's source dataset. `Trainer.validate()` orchestrates it: one
+  `reset()` before all of the metric's datasets, tagged `update()`s while iterating the loaders
+  (in the same pass as ordinary metrics — no extra forward), and a single `dist_reduce()` +
+  `compute()` after all of them. Ordinary single-dataset metrics are unchanged. `keep_best`
+  can track a multi-metric by name. The datasets a metric declares must exist among the test
+  loaders and the roster must be non-empty, else validation raises a clear error. Under DDP,
+  `dist_reduce()` gathers each metric's buffers across ranks (helper `all_gather_cat`) so
+  `compute()` sees the full set; the console prints a short `Finalizing multi-dataset
+  metrics…` / `Finalized multi-dataset metrics: …` summary after the per-loader lines.
+
+### Changed
+
+- **All in-code comments and docstrings translated to English.** echelon3 is a public,
+  multi-language package; the source is now uniformly English. No behavior change — the sweep
+  touched only comments/docstrings (and a single informational runtime line in the estimator
+  entry point).
+
 ## 0.9.6 — 2026-07-18
 
 ### Changed
