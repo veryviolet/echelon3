@@ -1,13 +1,13 @@
 """Losses for auxiliary heads of MultiBinarySegmenterPlus.
 
-Aux head supervision (по образцу RoadNet Liu TGRS 2019 + Batra CVPR 2019):
-  - edge        — BCE на Sobel(mask) >= threshold (binary edge GT)
-  - centerline  — BCE/MSE на gaussian-blurred skeleton(mask) (soft centerline)
-  - orientation — CE per-pixel на discretized tangent angle bin, валидно только
-                  по пикселям centerline (остальные — ignored).
+Aux head supervision (modeled on RoadNet Liu TGRS 2019 + Batra CVPR 2019):
+  - edge        — BCE on Sobel(mask) >= threshold (binary edge GT)
+  - centerline  — BCE/MSE on gaussian-blurred skeleton(mask) (soft centerline)
+  - orientation — per-pixel CE on the discretized tangent angle bin, valid only
+                  on centerline pixels (the rest are ignored).
 
-Каждый лосс работает по списку ключей "{head}.{aux_type}" в predictions+labels.
-ignore_index (255) маскирует не-валидные пиксели.
+Each loss operates over the list of keys "{head}.{aux_type}" in predictions+labels.
+ignore_index (255) masks the invalid pixels.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 
 class MultiHeadAuxEdgeBCE(nn.Module):
-    """BCE на edge-головах; ожидает labels["{head}.edge"] ∈ {0, 1, 255}."""
+    """BCE on the edge heads; expects labels["{head}.edge"] ∈ {0, 1, 255}."""
 
     def __init__(self, head_aux_names: List[str], ignore_index: int = 255,
                  head_weights: Dict[str, float] | None = None, **kwargs):
@@ -54,8 +54,8 @@ class MultiHeadAuxEdgeBCE(nn.Module):
 
 
 class MultiHeadAuxCenterlineBCE(nn.Module):
-    """BCE на centerline-головах. Labels — soft float ∈ [0, 1] или {0,1,255}.
-    Если labels float ∈ [0,1] — используем как soft target. Если long — как binary."""
+    """BCE on the centerline heads. Labels are a soft float ∈ [0, 1] or {0,1,255}.
+    If labels are float ∈ [0,1], use them as a soft target. If long, treat them as binary."""
 
     def __init__(self, head_aux_names: List[str], ignore_index: int = 255,
                  head_weights: Dict[str, float] | None = None, **kwargs):
@@ -95,7 +95,7 @@ class MultiHeadAuxCenterlineBCE(nn.Module):
 
 
 class MultiHeadAuxOrientationCE(nn.Module):
-    """CE на orientation-головах. Labels — long ∈ [0, num_bins-1] ∪ {ignore_index}."""
+    """CE on the orientation heads. Labels are long ∈ [0, num_bins-1] ∪ {ignore_index}."""
 
     def __init__(self, head_aux_names: List[str], ignore_index: int = 255,
                  head_weights: Dict[str, float] | None = None, **kwargs):

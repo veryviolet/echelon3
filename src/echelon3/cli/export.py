@@ -35,7 +35,7 @@ def exporter_app(cfg: DictConfig):
         print(f'--> Loading latest checkpoint... ')
         print(Fore.LIGHTGREEN_EX, end='')
         ckpt, num = ckpt_manager.load_latest_checkpoint(cpu_only=True)
-        # Снимает устаревший префикс 'module.' старых DataParallel/DDP-чекпоинтов.
+        # Strips the stale 'module.' prefix from old DataParallel/DDP checkpoints.
         ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
         print(f'--> Loaded {num} checkpoint. ')
@@ -57,7 +57,7 @@ def exporter_app(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-main = build_cli(exporter_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
+main = build_cli(exporter_app)  # click CLI + OmegaConf overrides (in place of @hydra.main)
 
 
 if __name__ == "__main__":

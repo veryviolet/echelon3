@@ -1,7 +1,7 @@
-"""Метрики для табличных задач (бинарная классификация/скоринг), в интерфейсе
-``echelon3.metrics.base.Metric`` (update/compute/reset). Считаются на CPU через
-scikit-learn/scipy — fit/predict-трейнер зовёт ``update(scores, y)`` полными массивами
-(вероятности положительного класса), затем ``compute()``.
+"""Metrics for tabular tasks (binary classification/scoring), in the
+``echelon3.metrics.base.Metric`` interface (update/compute/reset). Computed on the CPU via
+scikit-learn/scipy — the fit/predict trainer calls ``update(scores, y)`` with full arrays
+(positive-class probabilities), then ``compute()``.
 """
 import numpy as np
 
@@ -9,9 +9,9 @@ from echelon3.metrics.base import Metric
 
 
 def _pos_scores(pred):
-    """Приводим выход модели к вектору скоров положительного класса."""
+    """Reduce the model output to a vector of positive-class scores."""
     p = np.asarray(pred)
-    if p.ndim == 2 and p.shape[1] == 2:   # predict_proba бинарной задачи -> колонка класса 1
+    if p.ndim == 2 and p.shape[1] == 2:   # predict_proba of a binary task -> class-1 column
         return p[:, 1]
     if p.ndim == 2 and p.shape[1] == 1:
         return p[:, 0]
@@ -19,7 +19,7 @@ def _pos_scores(pred):
 
 
 class _TabularMetric(Metric):
-    """База: накапливает (scores, targets) и считает метрику в ``compute()``."""
+    """Base: accumulates (scores, targets) and computes the metric in ``compute()``."""
 
     def __init__(self):
         self.reset()
@@ -37,7 +37,7 @@ class _TabularMetric(Metric):
 
 
 class AUC(_TabularMetric):
-    """ROC AUC (выше — лучше)."""
+    """ROC AUC (higher is better)."""
 
     def compute(self):
         from sklearn.metrics import roc_auc_score
@@ -46,15 +46,15 @@ class AUC(_TabularMetric):
 
 
 class Gini(AUC):
-    """Gini = 2·AUC − 1 (выше — лучше)."""
+    """Gini = 2·AUC − 1 (higher is better)."""
 
     def compute(self):
         return 2.0 * super().compute() - 1.0
 
 
 class KS(_TabularMetric):
-    """Kolmogorov–Smirnov: макс. разрыв CDF скоров положительного и отрицательного
-    классов (выше — лучше). Классика кредитного скоринга."""
+    """Kolmogorov–Smirnov: the max gap between the score CDFs of the positive and negative
+    classes (higher is better). A credit-scoring classic."""
 
     def compute(self):
         from scipy.stats import ks_2samp
@@ -65,7 +65,7 @@ class KS(_TabularMetric):
 
 
 class LogLoss(_TabularMetric):
-    """Бинарная кросс-энтропия (ниже — лучше)."""
+    """Binary cross-entropy (lower is better)."""
 
     def compute(self):
         from sklearn.metrics import log_loss
@@ -74,7 +74,7 @@ class LogLoss(_TabularMetric):
 
 
 class Accuracy(_TabularMetric):
-    """Доля верных при пороге 0.5 (выше — лучше)."""
+    """Fraction correct at threshold 0.5 (higher is better)."""
 
     def __init__(self, threshold=0.5):
         self.threshold = threshold
@@ -86,11 +86,11 @@ class Accuracy(_TabularMetric):
         return float(accuracy_score(true, (_pos_scores(pred) > self.threshold).astype(int)))
 
 
-# ------------------------------------------------------------------ регрессия
-# ADMET-эндпоинты — регрессия; модель отдаёт predict (не proba). Метрики — по прямому выходу.
+# ------------------------------------------------------------------ regression
+# ADMET endpoints are regression; the model returns predict (not proba). Metrics use the direct output.
 
 class MAE(_TabularMetric):
-    """Mean absolute error (ниже — лучше)."""
+    """Mean absolute error (lower is better)."""
 
     def compute(self):
         from sklearn.metrics import mean_absolute_error
@@ -99,7 +99,7 @@ class MAE(_TabularMetric):
 
 
 class RMSE(_TabularMetric):
-    """Root mean squared error (ниже — лучше)."""
+    """Root mean squared error (lower is better)."""
 
     def compute(self):
         from sklearn.metrics import mean_squared_error
@@ -108,7 +108,7 @@ class RMSE(_TabularMetric):
 
 
 class R2(_TabularMetric):
-    """Коэффициент детерминации R² (выше — лучше)."""
+    """Coefficient of determination R² (higher is better)."""
 
     def compute(self):
         from sklearn.metrics import r2_score
@@ -117,7 +117,7 @@ class R2(_TabularMetric):
 
 
 class SpearmanR(_TabularMetric):
-    """Ранговая корреляция Спирмена (выше — лучше) — частая метрика ADMET-лидербордов."""
+    """Spearman rank correlation (higher is better) — a common metric on ADMET leaderboards."""
 
     def compute(self):
         from scipy.stats import spearmanr
@@ -126,7 +126,7 @@ class SpearmanR(_TabularMetric):
 
 
 class PearsonR(_TabularMetric):
-    """Корреляция Пирсона (выше — лучше)."""
+    """Pearson correlation (higher is better)."""
 
     def compute(self):
         from scipy.stats import pearsonr

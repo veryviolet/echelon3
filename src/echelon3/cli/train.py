@@ -20,36 +20,37 @@ from echelon3.creator import create_tabular_datasets, create_estimator_trainer
 
 
 def _is_estimator_cfg(cfg: DictConfig) -> bool:
-    """Estimator (fit/predict) run vs картиночный SGD run. Отличаем по секции:
-    у estimator-мира — `model:` (и нет `net:`); у SGD — `net:`."""
+    """Estimator (fit/predict) run vs image SGD run. Distinguished by section:
+    the estimator world has `model:` (and no `net:`); SGD has `net:`."""
     return 'model' in cfg.keys() and 'net' not in cfg.keys()
 
 
 def trainer_app(cfg: DictConfig):
-    # Баннер + Fore.CYAN печатаем в РОДИТЕЛЕ до DDP-лаунча: тогда он идёт ПЕРЕД
-    # сообщениями лаунчера, а те наследуют cyan (colorama держит цвет в процессе) —
-    # иначе они шли до баннера и без цвета. Спавн-воркеры баннер не повторяют.
+    # We print the banner + Fore.CYAN in the PARENT before the DDP launch: then it
+    # comes BEFORE the launcher messages, which inherit cyan (colorama keeps the color
+    # within the process) — otherwise they would come before the banner and without
+    # color. Spawned workers do not repeat the banner.
     print(Fore.CYAN)
     print(f'\n\n{__title__} {__version__}: trainer.\n\n')
-    # Роутинг по типу трейнера: fit/predict (деревья, табличные FM) собирается СВОЕЙ
-    # веткой (без optimizer/loss/loaders/DDP), картиночный SGD — как раньше.
+    # Routing by trainer type: fit/predict (trees, tabular FM) is assembled by its OWN
+    # branch (without optimizer/loss/loaders/DDP), image SGD as before.
     if _is_estimator_cfg(cfg):
         _train_estimator(cfg)
         return
-    # Встроенный DDP: если запрошено >1 GPU и мы не воркер — порождаем по процессу
-    # на GPU (замена torchrun) и выходим; иначе обучаемся в этом процессе.
+    # Built-in DDP: if >1 GPU is requested and we are not a worker — spawn one process
+    # per GPU (a replacement for torchrun) and exit; otherwise train in this process.
     if maybe_launch_ddp(cfg, _train):
         return
     _train(cfg)
 
 
 def _train_estimator(cfg: DictConfig):
-    """Сборка и запуск fit/predict-модели (EstimatorTrainer). Своя короткая сборка:
-    model + табличные датасеты + метрики + ckpt; ни optimizer/loss/loaders, ни DDP."""
+    """Assembles and runs a fit/predict model (EstimatorTrainer). Its own short setup:
+    model + tabular datasets + metrics + ckpt; no optimizer/loss/loaders, no DDP."""
     setup_warnings()
     device = resolve_single_device(cfg, torch.cuda.is_available())
     print(Fore.CYAN)
-    print(f'--> Estimator (fit/predict) run. device={device} (модель сама решает, где считать)')
+    print(f'--> Estimator (fit/predict) run. device={device} (the model decides where to compute)')
 
     print(f'--> Initializing model... ')
     model = create_universal(cfg.model)
@@ -108,32 +109,32 @@ def _train_estimator(cfg: DictConfig):
 
 def _train(cfg: DictConfig):
 
-    setup_warnings()  # копить предупреждения, саммари — перед каждой валидацией
-    _install_sigint_flag()  # помечать Ctrl-C флагом (отличить смерть воркера от OOM)
+    setup_warnings()  # accumulate warnings, summary — before each validation
+    _install_sigint_flag()  # flag Ctrl-C (to tell a worker death apart from OOM)
     use_ddp = ddp.init_ddp_if_needed()
 
-    # TF32 matmul + cuDNN autotune (process-level) — до создания сети.
+    # TF32 matmul + cuDNN autotune (process-level) — before the network is created.
     _tcfg = cfg.trainer.config if ('trainer' in cfg.keys() and 'config' in cfg.trainer.keys()) else {}
     runtime.setup_fast_matmul(tf32=_tcfg.get('tf32', True),
                               cudnn_benchmark=_tcfg.get('cudnn_benchmark', True))
     if use_ddp:
-        # Один процесс = один GPU; cfg.device/device_ids игнорируются, видимость
-        # GPU задаётся через CUDA_VISIBLE_DEVICES перед torchrun.
+        # One process = one GPU; cfg.device/device_ids are ignored, GPU visibility
+        # is set via CUDA_VISIBLE_DEVICES before torchrun.
         device = torch.device(f'cuda:{ddp.local_rank()}') \
             if torch.cuda.is_available() else torch.device('cpu')
         device_ids = None
         if not ddp.is_main():
-            sys.stdout = open(os.devnull, 'w')  # печатает только rank 0
+            sys.stdout = open(os.devnull, 'w')  # only rank 0 prints
     else:
         device = resolve_single_device(cfg, torch.cuda.is_available())
         if device.type == 'cuda' and device.index is not None:
-            # cuda:{idx} — двигаем дефолт устройства, чтобы .cuda()/autocast легли на
-            # нужную карту. Для голого 'cuda' (индекса нет) дефолт и так 0 — set_device
-            # тут падал бы (нужен индекс).
+            # cuda:{idx} — move the default device so that .cuda()/autocast land on the
+            # right card. For bare 'cuda' (no index) the default is already 0 —
+            # set_device would fail here (an index is required).
             torch.cuda.set_device(device)
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
-    print(Fore.CYAN)  # воркер: свой цвет (баннер уже напечатан родителем)
+    print(Fore.CYAN)  # worker: its own color (the banner is already printed by the parent)
 
     if use_ddp:
         print(f'--> DDP: world_size={ddp.world_size()}, backend={torch.distributed.get_backend()}, '
@@ -249,7 +250,7 @@ def _train(cfg: DictConfig):
     else:
         print(f'--> No mlops backend configured. Falling back to tensorboard logger... ')
         logger_config = None
-    # В DDP события пишет только rank 0 — не-главные ранки не создают writer'ов.
+    # Under DDP only rank 0 writes events — non-main ranks do not create writers.
     mlops_logger = create_mlops_logger(cfg.target, logger_config) \
         if (not use_ddp or ddp.is_main()) else None
 
@@ -266,24 +267,26 @@ def _train(cfg: DictConfig):
     try:
         trainer.train()
     except KeyboardInterrupt:
-        # Ctrl-C — штатная остановка, без пугающего traceback.
-        _silence_sigint()  # ПЕРВЫМ: повторный SIGINT не должен увести нас мимо os._exit в finally
+        # Ctrl-C — a normal stop, without a scary traceback.
+        _silence_sigint()  # FIRST: a repeated SIGINT must not take us past os._exit into finally
         if ddp.is_main():
             print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
             sys.stderr.flush()
-        # ВАЖНО: гасим DataLoader-воркеров ДО os._exit. os._exit пропускает finally, а
-        # PDEATHSIG добивает воркеров SIGKILL'ом без освобождения их семафоров — иначе
-        # resource_tracker лаунчера ругается на «leaked semaphore objects» (утечка /dev/shm).
+        # IMPORTANT: shut down the DataLoader workers BEFORE os._exit. os._exit skips
+        # finally, and PDEATHSIG finishes the workers off with SIGKILL without releasing
+        # their semaphores — otherwise the launcher's resource_tracker complains about
+        # "leaked semaphore objects" (a /dev/shm leak).
         _close_quietly(trainer)
         if ddp.is_ddp():
-            os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров
+            os._exit(130)  # 128+SIGINT: hard exit → elastic reaps the peers
         raise SystemExit(130)
     except Exception as e:
-        # Ctrl-C мог убить воркер-даталоадера раньше главного (гонка до SIG_IGN) — torch
-        # кидает RuntimeError 'worker ... killed by signal: Interrupt'. Это прерывание, а не
-        # падёж: гасим чисто (exit 130), без страшного traceback/аборта.
+        # Ctrl-C may have killed a dataloader worker before the main process (a race
+        # before SIG_IGN) — torch raises RuntimeError 'worker ... killed by signal:
+        # Interrupt'. This is an interruption, not a crash: shut down cleanly (exit 130),
+        # without a scary traceback/abort.
         if _looks_like_interrupt(e):
-            _silence_sigint()  # как и в KeyboardInterrupt-ветке: не даём повторному SIGINT сорвать выход
+            _silence_sigint()  # as in the KeyboardInterrupt branch: don't let a repeated SIGINT break the exit
             if ddp.is_main():
                 print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
                 sys.stderr.flush()
@@ -291,23 +294,23 @@ def _train(cfg: DictConfig):
             if ddp.is_ddp():
                 os._exit(130)
             raise SystemExit(130)
-        # Traceback печатаем ДО shutdown в stderr (stdout не-главных ранков заглушён).
+        # We print the traceback to stderr BEFORE shutdown (stdout of non-main ranks is silenced).
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
-        _close_quietly(trainer)  # освободить семафоры воркеров и на аварийном пути
+        _close_quietly(trainer)  # release worker semaphores on the failure path too
         if ddp.is_ddp():
-            # Чистый destroy_process_group() может зависнуть на NCCL-teardown, пока в
-            # группе висит недоделанный коллектив (упавший ранг не выходит → тихий вис).
-            # Жёсткий выход → лаунчер снимает пиров.
+            # A clean destroy_process_group() can hang on the NCCL teardown while an
+            # unfinished collective is pending in the group (the crashed rank does not
+            # exit → a silent hang). A hard exit → the launcher reaps the peers.
             sys.stderr.flush()
             os._exit(1)
         raise
     finally:
         if ddp.is_main():
-            warncollect.flush()  # финальное саммари хвостовых предупреждений
+            warncollect.flush()  # final summary of trailing warnings
         try:
-            trainer.close()  # погасить воркеров даталоадеров на чистом выходе
+            trainer.close()  # shut down the dataloader workers on a clean exit
         except Exception:
             pass
         ddp.shutdown()
@@ -315,7 +318,7 @@ def _train(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-main = build_cli(trainer_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
+main = build_cli(trainer_app)  # click CLI + OmegaConf overrides (in place of @hydra.main)
 
 
 if __name__ == "__main__":

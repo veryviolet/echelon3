@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from torchvision.utils import save_image
-import shutil  # добавлено для копирования исходных файлов
+import shutil  # added for copying source files
 import cv2
 import numpy as np
 
@@ -14,14 +14,14 @@ from echelon3.data.imageclassifier import FoldersHiveImageClassifierDataset
 
 
 class ClassifierEvaluator(Evaluator):
-    """Оценка классификатора по валидационному (test) датасету
-    + сохранение ошибок в папки X внутри scores_and_labels.
+    """Evaluate a classifier on the validation (test) dataset
+    + save misclassified samples into per-class folders X inside scores_and_labels.
 
-    В каталоге X хранятся сэмплы, где истинный класс X,
-    а модель на них ошибается.
+    Folder X holds the samples whose true class is X
+    but which the model gets wrong.
 
-    Конфиг evaluator.config должен содержать:
-      - scores_and_labels: str  # базовая папка для сохранения ошибок
+    The evaluator.config must contain:
+      - scores_and_labels: str  # base folder for saving errors
     """
 
     def __init__(
@@ -46,7 +46,7 @@ class ClassifierEvaluator(Evaluator):
         self.errors_root = scores_and_labels
         os.makedirs(self.errors_root, exist_ok=True)
 
-        # переносим метрику на тот же девайс, что и сеть (если поддерживает to)
+        # move the metric to the same device as the network (if it supports to)
         if hasattr(self.metric, "to"):
             self.metric = self.metric.to(self.device)
 
@@ -56,11 +56,11 @@ class ClassifierEvaluator(Evaluator):
         base_dataset,
     ) -> Optional[FoldersHiveImageClassifierDataset]:
         """
-        Собирает датасет по папкам ошибок:
+        Builds a dataset from the error folders:
           errors_root/<class_id>/*.png|*.jpg|...
 
-        Использует ТЕ ЖЕ augment и preprocess, что и исходный тестовый датасет,
-        чтобы пайплайн полностью совпадал с основным валидатором.
+        Uses the SAME augment and preprocess as the original test dataset,
+        so the pipeline fully matches the main validator.
         """
         if not error_classes:
             return None
@@ -79,9 +79,9 @@ class ClassifierEvaluator(Evaluator):
 
     def _evaluate_on_errors(self, batch_size: int, error_classes: set[int], base_dataset):
         """
-        Дополнительный прогон: считаем метрику на собранных ошибках.
-        Ожидаем, что accuracy (и подобные метрики) будут равны 0
-        (т.к. мы собрали только неправильно классифицированные примеры).
+        Extra pass: compute the metric on the collected errors.
+        We expect accuracy (and similar metrics) to be 0
+        (since we collected only misclassified examples).
         """
         errors_dataset = self._build_errors_dataset(error_classes, base_dataset)
         if errors_dataset is None or len(errors_dataset) == 0:
@@ -96,7 +96,7 @@ class ClassifierEvaluator(Evaluator):
             pin_memory=True,
         )
 
-        # Сбрасываем метрику и прогоняем по ошибкам
+        # Reset the metric and run over the errors
         if hasattr(self.metric, "reset"):
             self.metric.reset()
 
@@ -118,7 +118,7 @@ class ClassifierEvaluator(Evaluator):
 
                 logits = self.net(images)
 
-                # обновляем метрику
+                # update the metric
                 self.metric.update(logits, labels)
 
                 batch_size = images.size(0)
@@ -143,14 +143,14 @@ class ClassifierEvaluator(Evaluator):
         if hasattr(self.metric, "reset"):
             self.metric.reset()
 
-        # глобальный индекс только для fallback-сохранения тензоров
+        # global index only for the fallback tensor saving
         global_idx = 0
-        # проверяем, умеет ли датасет возвращать путь к исходному файлу
+        # check whether the dataset can return the path to the source file
         has_source_path = hasattr(dataloader.dataset, "get_source_path")
-        # сдвиг индекса в пределах всего датасета (по порядку выдачи батчей)
+        # index offset within the whole dataset (in batch iteration order)
         dataset_idx_offset = 0
 
-        # для последующей проверки: какие классы имели ошибки
+        # for the later check: which classes had errors
         error_classes: set[int] = set()
         last_batch_size: int = dataloader.batch_size or 1
 
@@ -169,10 +169,10 @@ class ClassifierEvaluator(Evaluator):
 
                 logits = self.net(images)
 
-                # обновляем метрику на основном датасете
+                # update the metric on the main dataset
                 self.metric.update(logits, labels)
 
-                # вычисление предсказаний
+                # compute predictions
                 if logits.ndim > 1 and logits.size(-1) > 1:
                     preds = torch.argmax(logits, dim=-1)
                 else:
@@ -188,14 +188,14 @@ class ClassifierEvaluator(Evaluator):
                         true_cls = int(labels[wi_int].detach().cpu())
                         pred_cls = int(preds[wi_int].detach().cpu())
 
-                        # запоминаем класс, для которого были ошибки
+                        # remember the class that had errors
                         error_classes.add(true_cls)
 
-                        # каталог по ИСТИННОМУ классу: errors_root/<true_cls>
+                        # folder by TRUE class: errors_root/<true_cls>
                         subdir = os.path.join(self.errors_root, f"{true_cls}")
                         os.makedirs(subdir, exist_ok=True)
 
-                        # глобальный индекс сэмпла в датасете (по порядку прохода)
+                        # global index of the sample in the dataset (in traversal order)
                         dataset_global_idx = dataset_idx_offset + wi_int
 
                         saved = False
@@ -205,18 +205,18 @@ class ClassifierEvaluator(Evaluator):
                                     dataset_global_idx
                                 )
                             except TypeError:
-                                # на случай старой сигнатуры без idx
+                                # in case of the old signature without idx
                                 src_path = dataloader.dataset.get_source_path()
 
                             if src_path is not None and os.path.exists(src_path):
-                                # сохраняем именно исходный файл
+                                # save the source file itself
                                 dst_name = os.path.basename(src_path)
                                 dst_path = os.path.join(subdir, dst_name)
                                 shutil.copy2(src_path, dst_path)
                                 saved = True
 
-                        # fallback: если не удалось получить/скопировать исходный файл,
-                        # сохраняем преобразованное изображение
+                        # fallback: if the source file could not be obtained/copied,
+                        # save the transformed image
                         if not saved:
                             fname = f"{global_idx:08d}.png"
                             fpath = os.path.join(subdir, fname)
@@ -230,15 +230,15 @@ class ClassifierEvaluator(Evaluator):
 
             progress.close()
 
-        # основной результат по исходному датасету
+        # main result on the original dataset
         result = self.metric.compute()
         if torch.is_tensor(result) and result.numel() == 1:
             result = float(result.cpu())
 
         print(f"--> Main metric on validation ({mode}): {result}")
 
-        # дополнительная проверка на собранных ошибках:
-        # используем тот же augment/preprocess, что и в исходном датасете
+        # additional check on the collected errors:
+        # use the same augment/preprocess as in the original dataset
         self._evaluate_on_errors(
             batch_size=last_batch_size,
             error_classes=error_classes,

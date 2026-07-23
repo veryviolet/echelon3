@@ -1,6 +1,6 @@
-"""Регрессия: echelon3.metrics.base.Metric.to() был no-op и по MRO затирал
-nn.Module.to у метрик-модулей с буферами → буферы оставались на CPU и validate на
-cuda падал. Metric.to должен делегировать в nn.Module.to, если метрика — модуль."""
+"""Regression: echelon3.metrics.base.Metric.to() was a no-op and, via MRO, shadowed
+nn.Module.to for metric modules with buffers → the buffers stayed on the CPU and validate on
+cuda crashed. Metric.to must delegate to nn.Module.to when the metric is a module."""
 import torch
 
 from echelon3.metrics.base import Metric
@@ -35,7 +35,7 @@ class _PureMetric(Metric):
 def test_metric_to_moves_module_buffers():
     m = _BufferMetric()
     assert m.to(torch.device("cpu")) is m
-    # dtype-перенос идёт через nn.Module.to — до фикса no-op его бы проглотил
+    # the dtype transfer goes through nn.Module.to — before the fix the no-op would have swallowed it
     m.to(torch.float64)
     assert m.state.dtype == torch.float64
 

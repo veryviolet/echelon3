@@ -1,4 +1,4 @@
-"""Единый исполняемый ``echelon3`` — click-группа с подкомандами.
+"""Single ``echelon3`` executable — a click group with subcommands.
 
     echelon3 train    --config-dir . --config-name cfg  [key=value ...]
     echelon3 finetune --config-dir . --config-name cfg  [key=value ...]
@@ -6,9 +6,9 @@
     echelon3 evaluate ...
     echelon3 export   ...
 
-Ленивая группа: модуль подкоманды (тянущий torch и пр.) импортируется только при
-её вызове, поэтому ``echelon3 --help`` быстрый. Отдельные ``echelon3-<cmd>``
-оставлены временными алиасами."""
+Lazy group: a subcommand's module (which pulls in torch etc.) is imported only when
+it is invoked, so ``echelon3 --help`` is fast. The separate ``echelon3-<cmd>``
+scripts are kept as temporary aliases."""
 import importlib
 
 import click

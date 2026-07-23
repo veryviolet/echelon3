@@ -1,12 +1,12 @@
-"""Табличные датасеты из РАЗНЫХ источников для fit/predict-трейнеров
-(``echelon3.trainers.estimator.EstimatorTrainer``) и, при желании, для градиентного
-пути.
+"""Tabular datasets from DIFFERENT sources for fit/predict trainers
+(``echelon3.trainers.estimator.EstimatorTrainer``) and, optionally, for the gradient
+path.
 
-Источник (``source``): файл (csv/parquet/feather/json/tsv), ``sql`` (соединение +
-запрос) или готовый ``frame`` (DataFrame/словарь). Список расширяем — добавьте загрузчик.
-В отличие от картиночных датасетов, augment/preprocess НЕ требуются: табличные признаки
-отдаются как есть (весь ``(X, y)`` через :meth:`Xy` для fit/predict, построчно через
-``__getitem__`` для градиентного пути).
+Source (``source``): a file (csv/parquet/feather/json/tsv), ``sql`` (connection +
+query), or a ready-made ``frame`` (DataFrame/dict). The list is extensible — just add a
+loader. Unlike image datasets, augment/preprocess are NOT required: tabular features
+are returned as-is (the whole ``(X, y)`` via :meth:`Xy` for fit/predict, row by row via
+``__getitem__`` for the gradient path).
 """
 import os
 
@@ -41,7 +41,7 @@ def _read_sql(sql=None, table=None, connection=None, **read_kwargs):
         raise ValueError("TabularDataset(source='sql'): 'connection' (string or DBAPI) is required")
     con = connection
     if isinstance(connection, str):
-        # строка подключения -> SQLAlchemy engine; живой DBAPI-connection передаётся как есть.
+        # connection string -> SQLAlchemy engine; a live DBAPI connection is passed as-is.
         try:
             from sqlalchemy import create_engine
         except ImportError as e:
@@ -57,18 +57,18 @@ def _read_sql(sql=None, table=None, connection=None, **read_kwargs):
 
 
 class TabularDataset(Dataset):
-    """Читает таблицу из ``source``, отделяет признаки от таргета.
+    """Reads a table from ``source`` and splits features from the target.
 
-    Args (через ``config:``):
-      * ``target``: имя колонки-таргета (обязательно; в test-таблице для инференса может
-        отсутствовать — тогда ``y`` = ``None``).
-      * ``features``: список колонок-признаков (по умолчанию — все, кроме ``target`` и ``drop``).
-      * ``drop``: колонки, которые выкинуть из признаков (id и т.п.).
-      * ``categorical``: имена категориальных колонок (прокидываются модели при fit, если умеет).
-      * ``source``: ``auto`` (по расширению файла) | ``csv``/``parquet``/... | ``sql``.
-      * файловый источник: ``path`` (+ ``read_kwargs`` для pandas-ридера).
-      * ``source: sql``: ``sql`` (запрос) или ``table``, плюс ``connection`` (строка/DBAPI).
-      * ``frame``: готовый DataFrame/словарь (in-memory, минуя источник).
+    Args (via ``config:``):
+      * ``target``: target column name (required; may be absent in the test table for
+        inference — then ``y`` = ``None``).
+      * ``features``: list of feature columns (by default — all except ``target`` and ``drop``).
+      * ``drop``: columns to drop from the features (ids and the like).
+      * ``categorical``: names of categorical columns (passed to the model at fit time, if it supports them).
+      * ``source``: ``auto`` (by file extension) | ``csv``/``parquet``/... | ``sql``.
+      * file source: ``path`` (+ ``read_kwargs`` for the pandas reader).
+      * ``source: sql``: ``sql`` (query) or ``table``, plus ``connection`` (string/DBAPI).
+      * ``frame``: a ready-made DataFrame/dict (in-memory, bypassing the source).
     """
 
     def __init__(self, target, features=None, drop=None, categorical=None,
@@ -82,7 +82,7 @@ class TabularDataset(Dataset):
         else:
             df = _read_file(source=source, **source_kwargs, **read_kwargs)
 
-        # target — строка (одиночный) или список (мульти-таргет, напр. ADMET-эндпоинты).
+        # target — a string (single) or a list (multi-target, e.g. ADMET endpoints).
         self.targets = [target] if isinstance(target, str) else list(target)
         self.target = self.targets[0]
         drop = set(drop or [])
@@ -93,17 +93,17 @@ class TabularDataset(Dataset):
 
         self._X = df[self.features].reset_index(drop=True)
         present = [t for t in self.targets if t in df.columns]
-        self._Y = df[present].reset_index(drop=True) if present else None  # все таргеты (DataFrame)
-        self._y = df[self.target].to_numpy() if self.target in df.columns else None  # первый (совместимость)
+        self._Y = df[present].reset_index(drop=True) if present else None  # all targets (DataFrame)
+        self._y = df[self.target].to_numpy() if self.target in df.columns else None  # first (compatibility)
 
     def Xy(self):
-        """Весь датасет разом: ``(X: DataFrame, y: ndarray | None)`` — для fit/predict
-        (y — первый таргет; для мульти-таргета используйте :meth:`y_frame`)."""
+        """The whole dataset at once: ``(X: DataFrame, y: ndarray | None)`` — for fit/predict
+        (y is the first target; for multi-target use :meth:`y_frame`)."""
         return self._X, self._y
 
     def y_frame(self):
-        """DataFrame всех присутствующих таргетов (мульти-таргет) — колонки могут
-        содержать NaN (ADMET-данные разрежены: не у всех молекул измерены все эндпоинты)."""
+        """DataFrame of all present targets (multi-target) — columns may
+        contain NaN (ADMET data is sparse: not every molecule has all endpoints measured)."""
         return self._Y
 
     @property
@@ -125,15 +125,15 @@ class TabularDataset(Dataset):
 
 
 class TabularPreprocessor:
-    """Декларативный препроцессор табличных признаков (обёртка sklearn
-    ``ColumnTransformer``) — чтобы смена движка оставалась сменой ТОЛЬКО ``model:``,
-    даже когда в данных есть категории/пропуски, а движок (LogReg/XGBoost/TabPFN) хочет
-    числа.
+    """A declarative preprocessor for tabular features (a wrapper around sklearn's
+    ``ColumnTransformer``) — so that switching the engine stays a change to ``model:`` ONLY,
+    even when the data has categories/missing values while the engine (LogReg/XGBoost/TabPFN)
+    wants numbers.
 
-    Числовые колонки: impute (+ опц. scale). Категориальные: impute + encode
-    (onehot|ordinal). Колонки авто-детектятся по dtype, либо задаются явно
-    (``numeric``/``categorical``). ``EstimatorTrainer`` фитит препроцессор на train и
-    применяет к тестам (без утечки), и кладёт зафиченным в inference-бандл.
+    Numeric columns: impute (+ optional scale). Categorical: impute + encode
+    (onehot|ordinal). Columns are auto-detected by dtype, or specified explicitly
+    (``numeric``/``categorical``). ``EstimatorTrainer`` fits the preprocessor on train and
+    applies it to the test sets (no leakage), and stores it fitted in the inference bundle.
     """
 
     def __init__(self, numeric=None, categorical=None,

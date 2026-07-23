@@ -1,9 +1,9 @@
-"""Partial weight loader: грузим только совпадающие по имени И форме веса.
+"""Partial weight loader: load only weights that match by name AND shape.
 
-Использование для warm-restart с архитектурой-расширением (MultiBinarySegmenter
+Used for warm-restart with an extended architecture (MultiBinarySegmenter
 → MultiBinarySegmenterPlus): backbone + neck.projs + heads.{road,water,...}
-переносятся из v17 ckpt; D-LinkNet center block и aux головы инициализируются
-случайно (как при scratch инициализации).
+are carried over from the v17 ckpt; the D-LinkNet center block and aux heads are
+initialized randomly (as in a from-scratch initialization).
 """
 from __future__ import annotations
 
@@ -15,15 +15,15 @@ class PartialWeightsLoader:
     skipping mismatched/missing entries. Mirrors HuggingFace strict=False semantics."""
 
     def __init__(self, strip_prefix: str | None = None, **kwargs):
-        # strip_prefix — снимает префикс из ключей чекпойнта (например 'module.'
-        # после DDP wrap), если нужно. None — без обработки.
+        # strip_prefix — removes a prefix from the checkpoint keys (e.g. 'module.'
+        # after a DDP wrap), if needed. None — no processing.
         self.strip_prefix = strip_prefix
 
     def load(self, net, weights, device):
-        # weights_only=False — echelon3 чекпойнты сериализуют объекты trainer/metric
-        # (numpy/echelon-классы), которых torch 2.6 strict-mode не разрешает.
+        # weights_only=False — echelon3 checkpoints serialize trainer/metric objects
+        # (numpy/echelon classes) that torch 2.6 strict mode does not allow.
         ckpt = torch.load(weights, map_location=device, weights_only=False)
-        # Tar/dict-of-state форматы echelon3 могут быть:
+        # echelon3 tar/dict-of-state formats can be:
         #   {'net': state_dict, ...}  /  {'state_dict': sd}  /  raw sd
         if isinstance(ckpt, dict):
             for k in ("model_state_dict", "net", "state_dict"):

@@ -36,7 +36,7 @@ class DataFrameImageClassifierDataset(AllFilesDataset):
             raise NotImplementedError('that source is not implemented yet')
 
     def get_source_path(self, idx: int) -> str | None:
-        """Вернуть путь к исходному файлу по индексу датасета."""
+        """Return the path to the source file by dataset index."""
         if hasattr(self, "filenames_with_labels") and 0 <= idx < len(self.filenames_with_labels):
             return self.filenames_with_labels[idx][0]
         return None
@@ -60,16 +60,16 @@ class FoldersHiveImageClassifierDataset(PerClassFilesDataset):
 
             shuffle(self.filenames[c])
 
-        # плоский список файлов в порядке классов и их файлов
+        # flat list of files in the order of classes and their files
         self._flat_filenames = []
         for c in range(self.classes):
             self._flat_filenames.extend(self.filenames[c])
 
     def get_source_path(self, idx: int) -> str | None:
-        """Вернуть путь к исходному файлу по *индексу датасета*.
+        """Return the path to the source file by *dataset index*.
 
-        ВАЖНО: используем ту же логику индексации, что и get_item/__getitem__,
-        чтобы путь соответствовал именно тому сэмплу, который идёт в сеть.
+        IMPORTANT: we use the same indexing logic as get_item/__getitem__,
+        so the path corresponds exactly to the sample that goes into the network.
         """
         try:
             item = self.get_item(idx)  # (path, label)
@@ -83,12 +83,12 @@ class FoldersHiveImageClassifierDataset(PerClassFilesDataset):
 
 class FolderWithFixedLabelDataset(PerClassFilesDataset):
     """
-    Аналог FoldersHiveImageClassifierDataset, но:
-      * не использует подпапки "0/1/...",
-      * берёт ВСЕ файлы из `folder/**/wildcards`,
-      * все сэмплы имеют один и тот же класс `fixed_label`.
+    Analogous to FoldersHiveImageClassifierDataset, but:
+      * does not use "0/1/..." subfolders,
+      * takes ALL files from `folder/**/wildcards`,
+      * all samples share the same class `fixed_label`.
 
-    Конфиг:
+    Config:
       module: echelon3.data.imageclassifier
       type: FolderWithFixedLabelDataset
       config:
@@ -97,17 +97,17 @@ class FolderWithFixedLabelDataset(PerClassFilesDataset):
         wildcards: ['*.jpg','*.jpeg','*.png']
     """
 
-    folder = None        # путь к папке с файлами ОДНОГО класса
-    fixed_label = None   # метка этого класса (int)
-    wildcards = None     # список масок, как у FoldersHiveImageClassifierDataset
+    folder = None        # path to the folder with files of a SINGLE class
+    fixed_label = None   # label of this class (int)
+    wildcards = None     # list of masks, as in FoldersHiveImageClassifierDataset
 
-    # __init__ не переопределяем:
-    # BasicDataset.__init__ проставит folder/fixed_label/wildcards из kwargs
-    # и FilesDataset.__init__ вызовет collect_filenames_with_labels()
+    # We do not override __init__:
+    # BasicDataset.__init__ sets folder/fixed_label/wildcards from kwargs
+    # and FilesDataset.__init__ calls collect_filenames_with_labels()
 
     def collect_filenames_with_labels(self):
         """
-        Заполняем self.filenames в формате, который ожидает PerClassFilesDataset:
+        Fill self.filenames in the format expected by PerClassFilesDataset:
           { fixed_label: [list_of_paths] }
         """
         if self.folder is None:
@@ -129,14 +129,14 @@ class FolderWithFixedLabelDataset(PerClassFilesDataset):
 
         shuffle(self.filenames[label])
 
-        # плоский список для get_source_path по аналогии с FoldersHiveImageClassifierDataset
+        # flat list for get_source_path, by analogy with FoldersHiveImageClassifierDataset
         self._flat_filenames = list(self.filenames[label])
 
     def get_source_path(self, idx: int) -> str | None:
-        """Вернуть путь к исходному файлу по индексу датасета.
+        """Return the path to the source file by dataset index.
 
-        Используем PerClassFilesDataset.get_item, чтобы
-        индекс совпадал с тем, что видит __getitem__.
+        We use PerClassFilesDataset.get_item so that
+        the index matches what __getitem__ sees.
         """
         try:
             item = self.get_item(idx)  # (path, label)

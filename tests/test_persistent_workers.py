@@ -1,7 +1,7 @@
-"""Умный дефолт persistent_workers: движок держит DataLoader-воркеров живыми между эпохами
-(num_workers>0), иначе их переспавн на границе эпохи ловит Ctrl-C в момент bootstrap ->
-трейсбеки + утёкшие семафоры. Guard'ы: только при num_workers>0 (иначе torch = ValueError),
-и через setdefault (явное значение юзера не перетираем)."""
+"""Smart default for persistent_workers: the engine keeps DataLoader workers alive between epochs
+(num_workers>0), otherwise their respawn at the epoch boundary catches Ctrl-C during bootstrap ->
+tracebacks + leaked semaphores. Guards: only when num_workers>0 (otherwise torch = ValueError),
+and via setdefault (we don't overwrite the user's explicit value)."""
 import torch
 from omegaconf import OmegaConf
 from torch.utils.data import TensorDataset
@@ -29,9 +29,9 @@ def test_persistent_workers_default_true_when_workers():
 
 
 def test_persistent_workers_not_set_when_no_workers():
-    # num_workers=0 — НЕ ставим (persistent_workers=True + 0 воркеров = ValueError у torch)
+    # num_workers=0 — do NOT set it (persistent_workers=True + 0 workers = ValueError in torch)
     tr, _ = create_dataloaders(_cfg(0), _ds(), _ds())
-    assert tr.persistent_workers is False   # torch-дефолт, не наш
+    assert tr.persistent_workers is False   # torch default, not ours
 
 
 def test_persistent_workers_respects_explicit_false():
@@ -40,6 +40,6 @@ def test_persistent_workers_respects_explicit_false():
 
 
 def test_eval_loader_not_persistent_by_default():
-    # eval НЕ форсим: резидентные eval-воркеры весь прогон зря держат RAM (мотивация слабее).
+    # we do NOT force eval: resident eval workers needlessly hold RAM for the whole run (weaker motivation).
     _, te = create_dataloaders(_cfg(0, test_workers=2), _ds(), _ds())
     assert te.persistent_workers is False

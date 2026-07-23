@@ -3,21 +3,21 @@ import sys
 
 
 def setup_warnings():
-    """Глушить предупреждения инлайн (чтобы не рвали прогрессбары) и копить их —
-    краткое саммари печатается штатным форматом echelon3 перед каждой валидацией
-    (см. echelon3.warncollect.flush в трейнере). Идемпотентно; зовётся в начале
-    каждого CLI."""
+    """Silence warnings inline (so they don't break progress bars) and collect them —
+    a short summary is printed in echelon3's standard format before each validation
+    (see echelon3.warncollect.flush in the trainer). Idempotent; called at the start of
+    every CLI."""
     from echelon3 import warncollect
     warncollect.install()
 
 
 def add_cwd_to_sys_path():
-    """Делает модули текущего каталога импортируемыми из конфигов.
+    """Make modules in the current directory importable from configs.
 
-    Рабочая модель zoo-репозиториев: пользователь работает из корня своего
-    репо, конфиги ссылаются на локальные пакеты (module: my_zoo.nets.foo).
-    Запуск `python script.py` кладёт каталог скрипта в sys.path автоматически,
-    console-script — нет; выравниваем поведение.
+    Working model for zoo repositories: the user works from the root of their
+    repo, and configs reference local packages (module: my_zoo.nets.foo).
+    Running `python script.py` puts the script's directory on sys.path automatically,
+    a console-script does not; we align the behavior.
     """
     cwd = os.getcwd()
     if cwd not in sys.path:
@@ -25,7 +25,7 @@ def add_cwd_to_sys_path():
 
 
 def resolve_gpus(cfg):
-    """Список GPU для запуска: cfg.gpus, если задан, иначе ВСЕ видимые на ноде."""
+    """List of GPUs to run on: cfg.gpus if set, otherwise ALL GPUs visible on the node."""
     import torch
     if "gpus" in cfg and cfg.gpus is not None:
         return [int(g) for g in cfg.gpus]
@@ -33,11 +33,11 @@ def resolve_gpus(cfg):
 
 
 def build_cli(app_fn):
-    """click-команда взамен ``@hydra.main``: грузит OmegaConf-конфиг + Hydra-подобные
-    оверрайды (``key=`` / ``+`` / ``++`` / ``~``) и зовёт ``app_fn(cfg)``.
+    """click command in place of ``@hydra.main``: loads an OmegaConf config + Hydra-like
+    overrides (``key=`` / ``+`` / ``++`` / ``~``) and calls ``app_fn(cfg)``.
 
-    Прерывание (Ctrl-C) на этапе загрузки/сетапа — чисто, без traceback (в самом
-    обучении Ctrl-C ловится глубже, в trainer-цикле)."""
+    Interruption (Ctrl-C) during the load/setup stage exits cleanly, without a traceback
+    (during training itself, Ctrl-C is caught deeper, in the trainer loop)."""
     import click
     from echelon3.cli.config import load_config
 
@@ -64,13 +64,14 @@ def build_cli(app_fn):
 
 
 def resolve_single_device(cfg, cuda_available: bool):
-    """Устройство для НЕ-DDP запуска.
+    """Device for a NON-DDP run.
 
-    Приоритет: ``cfg.device=cpu`` (или CUDA недоступна) → CPU; иначе, если задан
-    ``gpus``, садимся на КОНКРЕТНУЮ карту ``gpus[0]`` (раньше одиночный режим
-    игнорировал индекс и всегда брал cuda:0 — тихая коллизия на шаренной ноде и
-    нарушение резерва GPU 0); иначе — ``cfg.device``. DDP-путь индекс уже уважает
-    (CUDA_VISIBLE_DEVICES для воркеров). Возврат — ``torch.device``."""
+    Priority: ``cfg.device=cpu`` (or CUDA unavailable) → CPU; otherwise, if ``gpus``
+    is set, we bind to the SPECIFIC card ``gpus[0]`` (previously single-device mode
+    ignored the index and always took cuda:0 — a silent collision on a shared node and
+    a violation of the GPU 0 reservation); otherwise ``cfg.device``. The DDP path
+    already respects the index (CUDA_VISIBLE_DEVICES for workers). Returns a
+    ``torch.device``."""
     import torch
     dev = str(cfg.device) if 'device' in cfg.keys() else 'cuda'
     if dev.startswith('cpu') or not cuda_available:
@@ -81,19 +82,19 @@ def resolve_single_device(cfg, cuda_available: bool):
 
 
 def maybe_launch_ddp(cfg, train_fn) -> bool:
-    """Встроенный однонодовый DDP-лаунчер (замена torchrun).
+    """Built-in single-node DDP launcher (replacement for torchrun).
 
-    Если запрошено >1 GPU и мы ещё не воркер — порождает по одному процессу на
-    GPU через штатный elastic_launch torch и возвращает True. Каждый воркер
-    получает RANK/LOCAL_RANK/WORLD_SIZE/MASTER_* и уже разобранный cfg, после
-    чего идёт обычным путём train_fn(cfg) → ddp.init_ddp_if_needed() включает DDP.
+    If >1 GPU is requested and we are not a worker yet, spawns one process per
+    GPU via torch's standard elastic_launch and returns True. Each worker
+    receives RANK/LOCAL_RANK/WORLD_SIZE/MASTER_* and the already-resolved cfg, then
+    proceeds along the usual path train_fn(cfg) → ddp.init_ddp_if_needed() enables DDP.
 
-    Возвращает False, если запускать нечего (1 GPU / CPU / уже под лаунчером или
-    внешним torchrun — тогда caller зовёт train_fn(cfg) сам).
+    Returns False if there is nothing to launch (1 GPU / CPU / already under a launcher
+    or an external torchrun — then the caller calls train_fn(cfg) itself).
     """
-    if "RANK" in os.environ:  # уже воркер (наш спавн или внешний torchrun)
+    if "RANK" in os.environ:  # already a worker (our spawn or an external torchrun)
         return False
-    # device=cpu форсит CPU: не поднимаем DDP даже на многокарточной ноде.
+    # device=cpu forces CPU: don't bring up DDP even on a multi-GPU node.
     if "device" in cfg and str(cfg.device).startswith("cpu"):
         return False
 
@@ -102,8 +103,8 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     if not torch.cuda.is_available() or len(gpus) <= 1:
         return False
 
-    # Явный список GPU ограничивает видимость воркеров; воркеры — свежие процессы
-    # (spawn), поэтому CUDA_VISIBLE_DEVICES читается ими заново.
+    # An explicit GPU list limits the workers' visibility; workers are fresh processes
+    # (spawn), so CUDA_VISIBLE_DEVICES is read by them anew.
     if "gpus" in cfg and cfg.gpus is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(g) for g in gpus)
 
@@ -112,9 +113,9 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
 
     print(f"--> DDP: launching {len(gpus)} worker(s) on GPUs {gpus} (no torchrun needed)")
 
-    # OOM-footgun: num_workers/prefetch_factor — ПЕР-РАНК, а лаунчер сажает все
-    # ранги на одну ноду, поэтому RAM ноды ~ ранги × num_workers × prefetch ×
-    # батч. Раздутое произведение — частая причина RAM-OOM (и «тихого» виса).
+    # OOM footgun: num_workers/prefetch_factor are PER-RANK, and the launcher places all
+    # ranks on a single node, so node RAM ~ ranks × num_workers × prefetch ×
+    # batch. A bloated product is a common cause of RAM-OOM (and of a "silent" hang).
     try:
         _dl = cfg.dataloaders.train.config
         _nw = int(_dl.get("num_workers", 0) or 0)
@@ -132,9 +133,9 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
                 print(f"--> WARNING: {len(gpus)}×{_nw}={len(gpus) * _nw} DataLoader workers "
                       f"> {_cores} cores — CPU over-subscription; lower num_workers "
                       "(rule of thumb: cores / ranks per rank).")
-            # persistent_workers для train дефолтится в true при num_workers>0 (это делает
-            # create_dataloaders в рантайме — в конфиге ключа может не быть). Информируем,
-            # когда флаг эффективно включён (не выключен явно).
+            # persistent_workers for train defaults to true when num_workers>0 (done by
+            # create_dataloaders at runtime — the key may be absent from the config). We inform
+            # the user when the flag is effectively on (not explicitly disabled).
             if _dl.get("persistent_workers") is not False:
                 print("--> persistent_workers is on (engine default at num_workers>0): train "
                       "workers stay alive between epochs — fewer respawns and less Ctrl-C "
@@ -151,15 +152,15 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
         rdzv_endpoint="localhost:0",
         run_id="echelon3",
         start_method="spawn",
-        # Fail-fast: не перезапускать сдохший от OOM ранг в уже расклеенную группу
-        # (дефолт 3 → тихий ретрай + зависшее ре-рандеву).
+        # Fail-fast: don't restart a rank that died from OOM into an already-broken group
+        # (default 3 → silent retry + a stuck re-rendezvous).
         max_restarts=0,
     )
-    # Резолвим интерполяции в родителе, чтобы все воркеры получили идентичный cfg.
+    # Resolve interpolations in the parent so all workers get an identical cfg.
     resolved = OmegaConf.create(OmegaConf.to_container(cfg, resolve=True))
     from torch.distributed.elastic.multiprocessing.errors import ChildFailedError
-    # elastic на SIGINT/SIGTERM (Ctrl-C ушёл всей группе) кидает SignalException —
-    # ловим её как штатное прерывание, а не как падёж, чтобы не было traceback.
+    # On SIGINT/SIGTERM (Ctrl-C went to the whole group) elastic raises SignalException —
+    # we catch it as a normal interruption, not as a failure, to avoid a traceback.
     _interrupt = (KeyboardInterrupt,)
     try:
         from torch.distributed.elastic.multiprocessing.api import SignalException
@@ -172,8 +173,8 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
         print('\n--> Interrupted by user (Ctrl-C), workers stopped.', file=sys.stderr)
         raise SystemExit(130)
     except ChildFailedError:
-        # Воркер умер (частая причина — RAM/CUDA-OOM от num_workers × prefetch ×
-        # ранги). Сообщаем явно, а не выходим молча по чужому traceback.
+        # A worker died (a common cause is RAM/CUDA-OOM from num_workers × prefetch ×
+        # ranks). We report it explicitly instead of exiting silently on someone else's traceback.
         print("--> DDP: a worker died (see the rank traceback above). Common cause under "
               "DDP: OOM from dataloaders.*.config.num_workers / prefetch_factor.",
               file=sys.stderr)
@@ -182,13 +183,13 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
 
 
 def _is_sigint_worker_death(exc) -> bool:
-    """Ctrl-C идёт всей группе процессов; иногда SIGINT убивает воркер DataLoader'а РАНЬШЕ,
-    чем тот успел выставить SIG_IGN (наш _pdeathsig_worker_init) — тогда главный процесс
-    получает не KeyboardInterrupt, а torch'евый RuntimeError
-    'DataLoader worker (pid ...) is killed by signal: Interrupt' (+ дальше C++ terminate →
-    Fatal Python error: Aborted). Это пользовательское прерывание, а не падёж — распознаём,
-    чтобы завершиться ЧИСТО (exit 130), а не печатать страшный traceback/абортиться.
-    Смерть воркера от ДРУГОГО сигнала (SIGKILL/SIGSEGV — OOM, реальный краш) сюда не попадает."""
+    """Ctrl-C goes to the whole process group; sometimes SIGINT kills a DataLoader worker
+    EARLIER than it managed to set SIG_IGN (our _pdeathsig_worker_init) — then the main process
+    receives not a KeyboardInterrupt but torch's RuntimeError
+    'DataLoader worker (pid ...) is killed by signal: Interrupt' (+ then C++ terminate →
+    Fatal Python error: Aborted). This is a user interruption, not a failure — we recognize it
+    to exit CLEANLY (exit 130) instead of printing a scary traceback / aborting.
+    A worker death from ANOTHER signal (SIGKILL/SIGSEGV — OOM, a real crash) is not caught here."""
     s = str(exc)
     return isinstance(exc, RuntimeError) and 'killed by signal' in s and \
         ('Interrupt' in s or 'SIGINT' in s)
@@ -198,11 +199,11 @@ _SIGINT_SEEN = False
 
 
 def _install_sigint_flag():
-    """В главном процессе ранга помечаем факт Ctrl-C флагом и поднимаем KeyboardInterrupt
-    (штатное поведение — как дефолтный обработчик). Флаг нужен, чтобы отличить смерть
-    воркера DataLoader'а ОТ Ctrl-C от настоящего краша воркера: на свежем torch SIGINT-смерть
-    воркера часто всплывает как 'DataLoader worker ... exited unexpectedly' (неотличимо от
-    OOM по тексту), но при выставленном флаге это именно прерывание."""
+    """In the rank's main process we flag the fact of Ctrl-C and raise KeyboardInterrupt
+    (standard behavior — like the default handler). The flag is needed to distinguish a
+    DataLoader worker death FROM Ctrl-C from a genuine worker crash: on recent torch a SIGINT
+    worker death often surfaces as 'DataLoader worker ... exited unexpectedly' (textually
+    indistinguishable from OOM), but with the flag set it is specifically an interruption."""
     import signal
 
     def _handler(signum, frame):
@@ -217,9 +218,10 @@ def _install_sigint_flag():
 
 
 def _looks_like_interrupt(exc) -> bool:
-    """True, если исключение — следствие Ctrl-C: torch явно назвал сигнал Interrupt/SIGINT,
-    ИЛИ был SIGINT (флаг) и это смерть воркера DataLoader'а (в т.ч. 'exited unexpectedly').
-    Без флага 'exited unexpectedly' НЕ считается прерыванием (мог быть OOM/segfault)."""
+    """True if the exception is a consequence of Ctrl-C: torch explicitly named the signal
+    Interrupt/SIGINT, OR there was a SIGINT (flag) and it is a DataLoader worker death
+    (including 'exited unexpectedly'). Without the flag, 'exited unexpectedly' is NOT
+    considered an interruption (it could have been OOM/segfault)."""
     if _is_sigint_worker_death(exc):
         return True
     if _SIGINT_SEEN and isinstance(exc, RuntimeError):
@@ -229,15 +231,15 @@ def _looks_like_interrupt(exc) -> bool:
 
 
 def _silence_sigint():
-    """Игнорировать повторные Ctrl-C на время shutdown. Зовётся ПЕРВЫМ в обработчике
-    прерывания — до print/flush/close/os._exit.
+    """Ignore repeated Ctrl-C during shutdown. Called FIRST in the interrupt handler —
+    before print/flush/close/os._exit.
 
-    Иначе второй SIGINT (elastic-агент повторно шлёт его рангам) снова поднимет
-    KeyboardInterrupt — уже ВНУТРИ нашего обработчика, мимо следующего os._exit(130):
-    управление уйдёт в finally → ddp.shutdown()=destroy_process_group() → NCCL-teardown
-    deadlock → ранг висит ~30с до force-SIGKILL (воркеры добиты PDEATHSIG'ом, семафоры
-    текут). SIG_IGN гарантирует, что путь до os._exit не прервётся. Идемпотентно.
-    signal.signal валиден только в главном потоке — ошибки (напр. вызов из не-main) глушим."""
+    Otherwise a second SIGINT (the elastic agent re-sends it to the ranks) would raise
+    KeyboardInterrupt again — now INSIDE our handler, past the following os._exit(130):
+    control would go to finally → ddp.shutdown()=destroy_process_group() → NCCL teardown
+    deadlock → the rank hangs ~30s until a force SIGKILL (workers finished off by PDEATHSIG,
+    semaphores leaking). SIG_IGN guarantees the path to os._exit is not interrupted. Idempotent.
+    signal.signal is valid only in the main thread — we swallow errors (e.g. a call from non-main)."""
     import signal
     try:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -246,14 +248,14 @@ def _silence_sigint():
 
 
 def _close_quietly(trainer, timeout=15.0):
-    """Best-effort graceful teardown DataLoader-воркеров перед выходом: освобождает их
-    семафоры и /dev/shm (иначе после жёсткого os._exit их добьёт PDEATHSIG-SIGKILL без
-    очистки, и resource_tracker лаунчера отчитается о «leaked semaphore objects»).
+    """Best-effort graceful teardown of DataLoader workers before exit: frees their
+    semaphores and /dev/shm (otherwise, after a hard os._exit, PDEATHSIG-SIGKILL finishes them
+    off without cleanup, and the launcher's resource_tracker reports "leaked semaphore objects").
 
-    Гоняем в daemon-потоке с join(timeout): если close() где-то подвиснет (напр.
-    _MultiProcessingDataLoaderIter._shutdown_workers ждёт pin_memory_thread.join() БЕЗ
-    таймаута), мы не задержим жёсткий выход дольше timeout — подвисший поток добьёт
-    сам os._exit. Идемпотентно; ошибки глушим."""
+    We run it in a daemon thread with join(timeout): if close() hangs somewhere (e.g.
+    _MultiProcessingDataLoaderIter._shutdown_workers waits on pin_memory_thread.join() WITHOUT
+    a timeout), we won't delay the hard exit longer than timeout — the hung thread is finished
+    off by os._exit itself. Idempotent; we swallow errors."""
     import threading
 
     def _run():

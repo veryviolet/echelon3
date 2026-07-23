@@ -35,9 +35,9 @@ class MultiPartBatchSampler(BatchSampler):
         self.dataset = dataset
         self.batch_size = batch_size
         self.drop_last = drop_last
-        # DDP-осведомлённость: индексы максимальной части шардим по рангу (disjoint между
-        # рангами). По умолчанию берём rank/world из инициализированной process group; на
-        # 1 GPU (num_replicas=1) поведение прежнее.
+        # DDP awareness: we shard the indices of the largest part by rank (disjoint across
+        # ranks). By default we take rank/world from the initialized process group; on
+        # 1 GPU (num_replicas=1) the behavior is unchanged.
         from echelon3 import ddp
         self.num_replicas = int(num_replicas) if num_replicas is not None else ddp.world_size()
         self.rank = int(rank) if rank is not None else ddp.rank()
@@ -45,18 +45,19 @@ class MultiPartBatchSampler(BatchSampler):
         self.quants[-1] = self.batch_size - sum(self.quants[:-1])
 
     def _max_part_indices(self):
-        """Индексы максимальной части, шардированные по рангу.
+        """Indices of the largest part, sharded by rank.
 
-        Дополняем список до кратного num_replicas (повтор с начала — как DistributedSampler),
-        чтобы у ВСЕХ рангов было РОВНО одинаковое число сэмплов: иначе разное число батчей
-        по рангам рассинхронит DDP-all-reduce градиентов → тихий hang. На 1 GPU — полный набор."""
+        We pad the list to a multiple of num_replicas (repeating from the start — like
+        DistributedSampler), so that ALL ranks have EXACTLY the same number of samples:
+        otherwise a differing batch count across ranks desyncs the DDP all-reduce of
+        gradients → a silent hang. On 1 GPU — the full set."""
         n = self.dataset.part_len(self.dataset.max_part())
         idxs = list(range(n))
         per_rank = (n + self.num_replicas - 1) // self.num_replicas
         total = per_rank * self.num_replicas
         if total > n:
-            idxs = idxs + idxs[: total - n]          # паддинг повтором до кратного
-        return idxs[self.rank::self.num_replicas]    # ровно per_rank у каждого ранга
+            idxs = idxs + idxs[: total - n]          # pad by repetition to a multiple
+        return idxs[self.rank::self.num_replicas]    # exactly per_rank for each rank
 
     def get_part_idx(self, part) -> int:
         for i in self.idxs[part]:
@@ -73,7 +74,7 @@ class MultiPartBatchSampler(BatchSampler):
                 f"batch_size may be too small, or shares are invalid."
             )
 
-        # Шард максимальной части для ЭТОГО ранга; unique_batches — по per-rank длине.
+        # Shard of the largest part for THIS rank; unique_batches — based on the per-rank length.
         max_idxs = self._max_part_indices()
         per_rank_max_len = len(max_idxs)
         self.unique_batches = (per_rank_max_len + max_part_batch_size - 1) // max_part_batch_size
@@ -116,10 +117,10 @@ class MultiPartBatchSampler(BatchSampler):
 
     def __len__(self) -> int:
         max_part = self.dataset.max_part()
-        # ВАЖНО: тот же quants[max_part], что и в __iter__/prepare_idxs (у последней части он
-        # = batch_size − сумма остальных). int(share*batch_size) расходится с реальной
-        # итерацией -> len завышается -> total_batches неверен -> пропуск end-of-epoch
-        # валидации/чекпоинта (триггер batch+1==total_batches никогда не срабатывает).
+        # IMPORTANT: the same quants[max_part] as in __iter__/prepare_idxs (for the last part it
+        # = batch_size − the sum of the rest). int(share*batch_size) diverges from the actual
+        # iteration -> len is overestimated -> total_batches is wrong -> the end-of-epoch
+        # validation/checkpoint is skipped (the batch+1==total_batches trigger never fires).
         max_part_batch_size = self.quants[max_part]
 
         if max_part_batch_size <= 0:
@@ -129,7 +130,7 @@ class MultiPartBatchSampler(BatchSampler):
                 f"batch_size={self.batch_size})"
             )
 
-        per_rank_max_len = len(self._max_part_indices())     # число батчей — на этот ранг
+        per_rank_max_len = len(self._max_part_indices())     # number of batches — for this rank
         if self.drop_last:
             return per_rank_max_len // max_part_batch_size
         else:
@@ -145,7 +146,7 @@ class MultiPartDataLoader(DataLoader):
                  pin_memory: bool = False, drop_last: bool = False,
                  timeout: float = 0, worker_init_fn: Optional[_worker_init_fn_t] = None,
                  multiprocessing_context=None, generator=None,
-                 *, prefetch_factor: Optional[int] = None,   # None: torch сам (2 при workers>0, ок при 0)
+                 *, prefetch_factor: Optional[int] = None,   # None: torch decides (2 when workers>0, ok at 0)
                  persistent_workers: bool = False):
         super(MultiPartDataLoader, self).__init__(
             dataset=dataset,

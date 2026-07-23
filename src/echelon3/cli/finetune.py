@@ -72,19 +72,19 @@ def _load_init_weights(net: torch.nn.Module, ckpt_path: str, strict: bool = Fals
 
 
 def finetune_app(cfg: DictConfig):
-    # Баннер + Fore.CYAN — в РОДИТЕЛЕ до DDP-лаунча (см. trainer_app): баннер первым,
-    # сообщения лаунчера наследуют cyan. Спавн-воркеры баннер не повторяют.
+    # Banner + Fore.CYAN — in the PARENT before the DDP launch (see trainer_app): banner first,
+    # launcher messages inherit cyan. Spawned workers don't repeat the banner.
     print(Fore.CYAN)
     print(f'\n\n{__title__} {__version__}: finetune trainer.\n\n')
-    # Встроенный DDP: несколько GPU — порождаем воркеры (замена torchrun) и выходим.
+    # Built-in DDP: multiple GPUs — spawn the workers (replacement for torchrun) and return.
     if maybe_launch_ddp(cfg, _finetune):
         return
     _finetune(cfg)
 
 
 def _finetune(cfg: DictConfig):
-    setup_warnings()  # копить предупреждения, саммари — перед каждой валидацией
-    _install_sigint_flag()  # помечать Ctrl-C флагом (отличить смерть воркера от OOM)
+    setup_warnings()  # collect warnings, summary — before each validation
+    _install_sigint_flag()  # flag Ctrl-C (to distinguish a worker death from OOM)
     use_ddp = ddp.init_ddp_if_needed()
     _tcfg = cfg.trainer.config if ('trainer' in cfg.keys() and 'config' in cfg.trainer.keys()) else {}
     runtime.setup_fast_matmul(tf32=_tcfg.get('tf32', True),
@@ -98,12 +98,12 @@ def _finetune(cfg: DictConfig):
     else:
         device = resolve_single_device(cfg, torch.cuda.is_available())
         if device.type == 'cuda' and device.index is not None:
-            # cuda:{idx} — двигаем дефолт устройства (.cuda()/autocast на нужную карту);
-            # для голого 'cuda' индекса нет, дефолт и так 0, а set_device тут падал бы.
+            # cuda:{idx} — move the default device (.cuda()/autocast onto the right card);
+            # bare 'cuda' has no index, the default is already 0, and set_device would fail here.
             torch.cuda.set_device(device)
         device_ids = list(cfg.device_ids) if 'device_ids' in cfg.keys() else None
 
-    print(Fore.CYAN)  # воркер: свой цвет (баннер уже напечатан родителем)
+    print(Fore.CYAN)  # worker: its own color (the banner has already been printed by the parent)
 
     _transform = cfg.transform if 'transform' in cfg.keys() else None
     train_augment, test_augment = create_augments(_transform)
@@ -188,22 +188,22 @@ def _finetune(cfg: DictConfig):
     try:
         trainer.train()
     except KeyboardInterrupt:
-        # Ctrl-C — штатная остановка, без пугающего traceback.
-        _silence_sigint()  # ПЕРВЫМ: повторный SIGINT не должен увести нас мимо os._exit в finally
+        # Ctrl-C — a normal stop, without a scary traceback.
+        _silence_sigint()  # FIRST: a repeat SIGINT must not carry us past os._exit into finally
         if ddp.is_main():
             print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
             sys.stderr.flush()
-        # Гасим DataLoader-воркеров ДО os._exit (тот пропускает finally): иначе их добьёт
-        # PDEATHSIG-SIGKILL без освобождения семафоров -> «leaked semaphore objects».
+        # Shut down DataLoader workers BEFORE os._exit (which skips finally): otherwise
+        # PDEATHSIG-SIGKILL finishes them off without freeing semaphores -> "leaked semaphore objects".
         _close_quietly(trainer)
         if ddp.is_ddp():
-            os._exit(130)  # 128+SIGINT: жёсткий выход → elastic снимает пиров
+            os._exit(130)  # 128+SIGINT: hard exit → elastic tears down the peers
         raise SystemExit(130)
     except Exception as e:
-        # Ctrl-C мог убить воркер-даталоадера раньше главного (гонка до SIG_IGN) — torch
-        # кидает 'worker ... killed by signal: Interrupt'. Прерывание, не падёж: чистый выход.
+        # Ctrl-C may have killed a dataloader worker before the main process (a race before SIG_IGN) — torch
+        # raises 'worker ... killed by signal: Interrupt'. An interruption, not a failure: clean exit.
         if _looks_like_interrupt(e):
-            _silence_sigint()  # как и в KeyboardInterrupt-ветке: не даём повторному SIGINT сорвать выход
+            _silence_sigint()  # as in the KeyboardInterrupt branch: don't let a repeat SIGINT break the exit
             if ddp.is_main():
                 print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
                 sys.stderr.flush()
@@ -211,20 +211,20 @@ def _finetune(cfg: DictConfig):
             if ddp.is_ddp():
                 os._exit(130)
             raise SystemExit(130)
-        # Traceback в stderr (stdout не-главных рангов заглушён). Под DDP — жёсткий
-        # выход: destroy_process_group() может зависнуть на NCCL-teardown → тихий вис.
-        # os._exit → лаунчер снимает пиров.
+        # Traceback to stderr (stdout of non-main ranks is silenced). Under DDP — a hard
+        # exit: destroy_process_group() may hang on NCCL teardown → a silent hang.
+        # os._exit → the launcher tears down the peers.
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
-        _close_quietly(trainer)  # освободить семафоры воркеров и на аварийном пути
+        _close_quietly(trainer)  # free worker semaphores on the failure path too
         if ddp.is_ddp():
             sys.stderr.flush()
             os._exit(1)
         raise
     finally:
         if ddp.is_main():
-            warncollect.flush()  # финальное саммари хвостовых предупреждений
+            warncollect.flush()  # final summary of trailing warnings
         try:
             trainer.close()
         except Exception:
@@ -234,7 +234,7 @@ def _finetune(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-main = build_cli(finetune_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
+main = build_cli(finetune_app)  # click CLI + OmegaConf overrides (in place of @hydra.main)
 
 
 if __name__ == "__main__":

@@ -1,14 +1,14 @@
 """clDice (centerline Dice) — Shit et al. CVPR 2021, https://arxiv.org/abs/2003.07311.
 
-Топология-aware loss для тонких трубчатых/линейных структур (дороги, реки,
-лесополосы). Прямо штрафует разрывы центральной линии.
+A topology-aware loss for thin tubular/linear structures (roads, rivers,
+shelterbelts). It directly penalizes breaks in the centerline.
 
-Идея: soft-skeleton через k итераций (min-pool затем max-pool на soft-pred).
-Затем clDice = 2 * (T_prec * T_sens) / (T_prec + T_sens) где
+Idea: a soft skeleton over k iterations (min-pool then max-pool on the soft prediction).
+Then clDice = 2 * (T_prec * T_sens) / (T_prec + T_sens) where
   T_prec  = sum(skel_pred * gt)     / sum(skel_pred)
   T_sens  = sum(skel_gt   * pred)   / sum(skel_gt)
 
-Здесь — multi-head вариант (как остальные multibinary лоссы echelon3).
+Here it is the multi-head variant (like the other multibinary losses in echelon3).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 
 def _soft_erode(x: torch.Tensor) -> torch.Tensor:
-    # для 2D: min-pool через -max-pool на negative
+    # for 2D: min-pool via -max-pool on the negative
     return -F.max_pool2d(-x, kernel_size=(3, 3), stride=1, padding=1)
 
 
@@ -33,8 +33,8 @@ def _soft_open(x: torch.Tensor) -> torch.Tensor:
 
 
 def soft_skeleton(prob: torch.Tensor, iters: int = 3) -> torch.Tensor:
-    """Дифференцируемый skeleton: итеративно вычитаем «открытие» из эрозии.
-    Чем больше iters — тем тоньше скелет (выбирается под max радиус линии)."""
+    """Differentiable skeleton: iteratively subtract the "opening" from the erosion.
+    The more iters, the thinner the skeleton (choose it for the max line radius)."""
     img = prob
     img1 = _soft_open(img)
     skel = F.relu(img - img1)
@@ -47,9 +47,9 @@ def soft_skeleton(prob: torch.Tensor, iters: int = 3) -> torch.Tensor:
 
 
 class MultiHeadSoftCLDiceWithIgnore(nn.Module):
-    """Soft clDice loss для multi-binary-head с маскированием ignore_index.
+    """Soft clDice loss for a multi-binary head with ignore_index masking.
 
-    Аргумент `smooth` — стабилизация деления, обычно 1.0.
+    The `smooth` argument stabilizes the division, usually 1.0.
     """
 
     def __init__(
@@ -71,9 +71,9 @@ class MultiHeadSoftCLDiceWithIgnore(nn.Module):
         }
         self.iters = int(iters)
         self.smooth = float(smooth)
-        # Downsample: внутри clDice работаем на (H/k, W/k) для экономии памяти.
-        # Скелет тонких линий устойчив к ↓2 (а часто и ↓4) — topology не теряется,
-        # пика памяти соsft-erode/dilate × iters × heads на full-res нет.
+        # Downsample: inside clDice we work at (H/k, W/k) to save memory.
+        # The skeleton of thin lines is robust to ↓2 (and often ↓4) — topology is not lost,
+        # and there is no memory peak of soft-erode/dilate × iters × heads at full resolution.
         self.downsample = int(downsample)
 
     def forward(

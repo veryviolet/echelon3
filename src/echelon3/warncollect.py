@@ -1,9 +1,10 @@
-"""Сбор предупреждений вместо инлайн-печати.
+"""Collecting warnings instead of printing them inline.
 
-Инлайн-варнинги рвут tqdm-прогрессбары и засоряют лог. Вместо этого глушим их
-печать, агрегируем по тексту, а краткое саммари печатаем в штатном формате
-echelon3 (``--> ...``) перед каждой валидацией. Модуль без зависимостей от
-остального echelon3 — импортируется и из CLI, и из трейнера."""
+Inline warnings break tqdm progress bars and clutter the log. Instead we suppress
+their printing, aggregate them by text, and print a short summary in the standard
+echelon3 format (``--> ...``) before each validation. The module has no
+dependencies on the rest of echelon3 — it is imported both from the CLI and from
+the trainer."""
 import warnings
 from collections import Counter
 
@@ -12,13 +13,13 @@ _installed = False
 
 
 def install():
-    """Перехватить показ предупреждений в счётчик (идемпотентно)."""
+    """Redirect the display of warnings into a counter (idempotent)."""
     global _installed
     if _installed:
         return
-    # "always" — чтобы каждый повтор доходил до счётчика (иначе дефолтный дедуп
-    # Python показал бы варнинг один раз на место вызова и счёт был бы занижен).
-    # Затем префиксом вешаем ignore на заведомый dev-шум — он до счётчика не дойдёт.
+    # "always" — so that every repeat reaches the counter (otherwise Python's default
+    # dedup would show a warning once per call site and the count would be understated).
+    # Then, as a prefix, we ignore known dev noise — it will not reach the counter.
     warnings.simplefilter("always")
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("ignore", category=FutureWarning)
@@ -34,7 +35,7 @@ def install():
 
 
 def flush(limit: int = 5):
-    """Печатает краткое саммари накопленных предупреждений (tqdm-safe) и очищает."""
+    """Prints a short summary of the accumulated warnings (tqdm-safe) and clears them."""
     if not _counts:
         return
     try:

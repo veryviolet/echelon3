@@ -1,19 +1,20 @@
-"""Поддержка DistributedDataParallel (DDP).
+"""DistributedDataParallel (DDP) support.
 
-Активация автоматическая — по переменным окружения RANK/WORLD_SIZE/LOCAL_RANK.
-Их выставляет либо встроенный лаунчер (`echelon3 train ... gpus=[0,1,2,3]` —
-elastic_launch порождает по процессу на GPU, torchrun не нужен), либо внешний
-torchrun/srun для много-нодовых запусков. Один GPU или CPU — обычный in-process
-запуск без обёртки (DataParallel убран в 0.5.0).
+Activation is automatic — driven by the RANK/WORLD_SIZE/LOCAL_RANK environment
+variables. They are set either by the built-in launcher (`echelon3 train ...
+gpus=[0,1,2,3]` — elastic_launch spawns one process per GPU, torchrun is not
+needed) or by an external torchrun/srun for multi-node runs. A single GPU or CPU
+runs in-process without any wrapper (DataParallel was removed in 0.5.0).
 
-Семантика конфига сохранена: dataloaders.train.config.batch_size — ГЛОБАЛЬНЫЙ
-батч; при DDP он делится на world_size (см. creator.create_dataloaders).
-Чекпойнты пишут РАЗВЁРНУТЫЙ state_dict (без префикса "module."); старые файлы с
-"module." грузятся корректно — префикс снимается автоматически.
+Config semantics are preserved: dataloaders.train.config.batch_size is the GLOBAL
+batch; under DDP it is divided by world_size (see creator.create_dataloaders).
+Checkpoints store the UNWRAPPED state_dict (without the "module." prefix); older
+files with "module." load correctly — the prefix is stripped automatically.
 
-Валидация в DDP СИММЕТРИЧНА: каждый ранг считает свой шард (DistributedSampler)
-через развёрнутую сеть, метрики агрегируются между рангами (torchmetrics — сами;
-кастомные Metric — через хук dist_reduce()). Сохранение чекпойнтов — только rank 0.
+Validation under DDP is SYMMETRIC: each rank computes its own shard
+(DistributedSampler) through the unwrapped network, and metrics are aggregated
+across ranks (torchmetrics do this themselves; custom Metrics via the
+dist_reduce() hook). Checkpoints are saved only by rank 0.
 """
 import os
 import signal
@@ -25,27 +26,28 @@ import torch.distributed as dist
 
 
 def set_pdeathsig():
-    """Linux: текущий процесс получает SIGKILL, как только умирает его родитель.
+    """Linux: the current process gets SIGKILL as soon as its parent dies.
 
-    Ставим в ранге (родитель — агент лаунчера) и в DataLoader-воркерах (родитель —
-    ранг), чтобы дерево процессов не осиротевало при os._exit / SIGKILL / краше
-    предка (иначе воркеры висят, держат /dev/shm и RAM, а новый запуск зависает на
-    первом батче). Best-effort, только Linux."""
+    We set this in the rank (parent is the launcher agent) and in DataLoader
+    workers (parent is the rank) so the process tree is not orphaned on os._exit /
+    SIGKILL / a crash of the ancestor (otherwise workers hang, hold /dev/shm and
+    RAM, and a new run stalls on the first batch). Best-effort, Linux only."""
     if sys.platform != "linux":
         return
     try:
         import ctypes
         PR_SET_PDEATHSIG = 1
         ctypes.CDLL("libc.so.6", use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
-        # Гонка: родитель мог умереть до prctl — тогда мы уже репарентнуты на init.
+        # Race: the parent may have died before prctl — then we are already reparented to init.
         if os.getppid() == 1:
             os._exit(1)
     except Exception:
         pass
 
-# Таймаут группы: бэкстоп на случай, когда ранг завис (не вышел) и elastic его не
-# снимает. Дефолт щедрый (валидация/большие шаги), но конфигурируемый — уменьшите
-# ECHELON3_DDP_TIMEOUT_MIN, чтобы «тихий» вис при рассинхроне падал быстрее.
+# Process group timeout: a backstop for when a rank hangs (does not exit) and
+# elastic does not reap it. The default is generous (validation/large steps) but
+# configurable — lower ECHELON3_DDP_TIMEOUT_MIN so a "silent" hang on a desync
+# fails faster.
 _PG_TIMEOUT = timedelta(minutes=int(os.environ.get("ECHELON3_DDP_TIMEOUT_MIN", "60")))
 
 
@@ -54,33 +56,33 @@ def ddp_env_present() -> bool:
 
 
 def init_ddp_if_needed() -> bool:
-    """Инициализирует process group при запуске под torchrun. Возвращает is_ddp()."""
+    """Initializes the process group when running under torchrun. Returns is_ddp()."""
     if ddp_env_present() and not dist.is_initialized():
-        # Ранг умирает вместе с агентом лаунчера (не осиротевает при его SIGKILL).
+        # The rank dies together with the launcher agent (not orphaned on its SIGKILL).
         set_pdeathsig()
-        # NCCL watchdog: аборт (а не молчаливое ожидание) при ошибке/рассинхроне +
-        # отчёт, какой ранг расклеился. setdefault — юзер может переопределить.
+        # NCCL watchdog: abort (instead of silently waiting) on an error/desync, plus
+        # a report of which rank fell out of sync. setdefault — the user may override.
         os.environ.setdefault("TORCH_NCCL_ASYNC_ERROR_HANDLING", "1")
         os.environ.setdefault("TORCH_NCCL_DESYNC_DEBUG", "1")
         backend = "nccl" if torch.cuda.is_available() else "gloo"
         pg_kwargs = dict(backend=backend, timeout=_PG_TIMEOUT)
         if torch.cuda.is_available():
             torch.cuda.set_device(local_rank())
-            # device_id глушит c10d-warning "barrier(): using the device under
-            # current context" в источнике (параметр есть в свежем torch).
+            # device_id silences the c10d warning "barrier(): using the device under
+            # current context" at the source (the parameter exists in recent torch).
             pg_kwargs["device_id"] = torch.device("cuda", local_rank())
         try:
             dist.init_process_group(**pg_kwargs)
         except TypeError:
-            pg_kwargs.pop("device_id", None)  # старый torch без device_id
+            pg_kwargs.pop("device_id", None)  # old torch without device_id
             dist.init_process_group(**pg_kwargs)
     return is_ddp()
 
 
 def shutdown():
-    # БЕЗ barrier: shutdown зовётся и на аварийном пути (finally), когда другие
-    # ранки могут быть в несовпадающих коллективах — barrier тут даёт дедлок
-    # и прячет исходный traceback.
+    # NO barrier: shutdown is also called on the failure path (finally), when other
+    # ranks may be in mismatched collectives — a barrier here would deadlock and hide
+    # the original traceback.
     if is_ddp():
         dist.destroy_process_group()
 
@@ -111,9 +113,9 @@ def barrier():
 
 
 def unwrap(net: torch.nn.Module) -> torch.nn.Module:
-    """Исходная сеть под обёртками DDP/DataParallel и torch.compile
-    (``OptimizedModule._orig_mod``), снятыми в любом порядке."""
-    for _ in range(4):  # страховка от неожиданной вложенности
+    """The underlying network with the DDP/DataParallel and torch.compile
+    (``OptimizedModule._orig_mod``) wrappers stripped, in any order."""
+    for _ in range(4):  # safeguard against unexpected nesting
         if isinstance(net, (torch.nn.DataParallel, torch.nn.parallel.DistributedDataParallel)):
             net = net.module
         elif hasattr(net, "_orig_mod"):  # torch.compile OptimizedModule
@@ -124,16 +126,16 @@ def unwrap(net: torch.nn.Module) -> torch.nn.Module:
 
 
 def state_dict_for_save(net: torch.nn.Module) -> dict:
-    """State dict БЕЗ префикса 'module.' — чекпоинты не зависят от обёртки
-    (DDP/одиночный процесс дают одинаковый файл)."""
+    """State dict WITHOUT the 'module.' prefix — checkpoints do not depend on the
+    wrapper (DDP and single-process runs produce the same file)."""
     return unwrap(net).state_dict()
 
 
 def load_state_dict_flexible(net: torch.nn.Module, state_dict: dict, strict: bool = True):
-    """Грузит веса в развёрнутый модуль, снимая с ключей префиксы обёрток —
-    'module.' (DataParallel/DDP) и '_orig_mod.' (torch.compile), в любом порядке
-    и вложенности, так что чекпоинты взаимозаменяемы между обёрнутыми и голыми
-    прогонами."""
+    """Loads weights into the unwrapped module, stripping wrapper prefixes from the
+    keys — 'module.' (DataParallel/DDP) and '_orig_mod.' (torch.compile), in any
+    order and nesting, so that checkpoints are interchangeable between wrapped and
+    bare runs."""
     _prefixes = ("module.", "_orig_mod.")
 
     def _strip(k: str) -> str:

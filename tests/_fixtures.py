@@ -1,10 +1,10 @@
-"""Крошечные классы для тестов create_* / Trainer без внешних данных."""
+"""Tiny classes for create_* / Trainer tests without external data."""
 import torch
 from torch.utils.data import Dataset, DataLoader
 
 
 class TinyPairs(Dataset):
-    """Датасет, принимающий augment/preprocess (как ждёт create_single_dataset)."""
+    """A dataset that accepts augment/preprocess (as create_single_dataset expects)."""
 
     def __init__(self, n: int = 8, augment=None, preprocess=None):
         self.n = n

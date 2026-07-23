@@ -115,8 +115,8 @@ def evaluate_app(cfg: DictConfig):
     print(Fore.CYAN, end="")
 
     print(f"--> Evaluating on validation (data.test)... ")
-    # TF32 + AMP-инференс: по умолчанию bf16 на поддерживающих GPU (precision: fp32
-    # чтобы выключить). autocast поверх верхнего вызова покрывает все Evaluator'ы.
+    # TF32 + AMP inference: bf16 by default on supporting GPUs (precision: fp32
+    # to disable). autocast around the top-level call covers all Evaluators.
     runtime.setup_fast_matmul(
         tf32=cfg.get("tf32", True), cudnn_benchmark=cfg.get("cudnn_benchmark", True)
     )
@@ -132,7 +132,7 @@ def evaluate_app(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-main = build_cli(evaluate_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
+main = build_cli(evaluate_app)  # click CLI + OmegaConf overrides (in place of @hydra.main)
 
 
 if __name__ == "__main__":

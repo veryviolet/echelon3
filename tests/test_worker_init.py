@@ -1,6 +1,7 @@
-"""Регрессия 0.7.2: PDEATHSIG-worker_init_fn обязан быть picklable, иначе
-DataLoader(multiprocessing_context='spawn') падает при пикле воркер-инициализатора
-(замыкание непиклится). Держим его модульной функцией + functools.partial."""
+"""Regression 0.7.2: the PDEATHSIG worker_init_fn must be picklable, otherwise
+DataLoader(multiprocessing_context='spawn') fails when pickling the worker
+initializer (a closure is not picklable). We keep it a module-level function +
+functools.partial."""
 import pickle
 
 from echelon3.creator import _worker_init_fn

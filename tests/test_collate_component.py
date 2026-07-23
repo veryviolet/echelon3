@@ -1,6 +1,6 @@
-"""Движок: `dataloaders.*.config.collate_fn` можно задать КОМПОНЕНТОМ (module/type/config) —
-create_dataloaders строит его в callable и передаёт в DataLoader (нужно для батчинга
-переменного размера — графы/сеты, напр. докинг)."""
+"""Engine: `dataloaders.*.config.collate_fn` can be given as a COMPONENT (module/type/config) —
+create_dataloaders builds it into a callable and passes it to DataLoader (needed for
+variable-size batching — graphs/sets, e.g. docking)."""
 import torch
 from omegaconf import OmegaConf
 from torch.utils.data import TensorDataset, default_collate

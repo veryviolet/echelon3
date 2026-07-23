@@ -57,8 +57,8 @@ class ImageSegmentationDataset(AllFilesDataset):
         self.filenames_with_labels = total
 
     def get_source_path(self, idx: int) -> str | None:
-        """Вернуть путь к исходному изображению по индексу датасета."""
+        """Return the path to the source image by dataset index."""
         if hasattr(self, "filenames_with_labels") and 0 <= idx < len(self.filenames_with_labels):
-            # кортеж вида (image_path, mask_path), возвращаем путь к изображению
+            # a tuple of the form (image_path, mask_path); return the path to the image
             return self.filenames_with_labels[idx][0]
         return None

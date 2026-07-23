@@ -28,7 +28,7 @@ def get_attr_from_module(module, attr):
     try:
         mdl = importlib.import_module(module)
     except ImportError:
-        # module может быть путём к .py-файлу (расширение из zoo/проекта пользователя)
+        # module may be a path to a .py file (an extension from the zoo/user project)
         try:
             module_name = os.path.splitext(os.path.basename(module))[0]
             spec = importlib.util.spec_from_file_location(module_name, module)
@@ -46,9 +46,9 @@ def get_attr_from_module(module, attr):
 
 
 def _cfg_kwargs(config) -> dict:
-    """kwargs из блока ``config``. ЕДИНОЕ правило по всему фреймворку: блок
-    ``config`` опционален у ЛЮБОГО компонента — если его нет, конструктор
-    вызывается без дополнительных аргументов (не «то опционален, то нет»)."""
+    """kwargs from the ``config`` block. A SINGLE rule across the whole framework: the
+    ``config`` block is optional for ANY component — if it is absent, the constructor
+    is called without extra arguments (not "sometimes optional, sometimes not")."""
     return dict(config.config) if 'config' in config.keys() else {}
 
 
@@ -63,7 +63,7 @@ def create_universal(config: DictConfig):
 def create_single_augment(config: DictConfig, bbox_params: DictConfig = None):
     transforms = []
 
-    # Если аугментаций нет (config is None), просто возвращаем ToTensorV2
+    # If there are no augmentations (config is None), just return ToTensorV2
     if config is not None:
         for one in config.values():
             transforms.append(create_universal(one))
@@ -81,7 +81,7 @@ def create_single_preprocess(config: DictConfig):
 def create_augments(config: DictConfig) -> Tuple[callable, callable]:
     transforms = {k: A.Compose([ToTensorV2()]) for k in TRANSFORM_PURPOSES}
 
-    if config is None:  # секция transform опущена — по ToTensorV2 на train/test
+    if config is None:  # transform section omitted — one ToTensorV2 for train/test
         return transforms['train'], transforms['test']
 
     for key, cfg in config.items():
@@ -98,14 +98,14 @@ def create_augments(config: DictConfig) -> Tuple[callable, callable]:
 def create_preprocesses(config: DictConfig) -> Tuple[callable, callable]:
     transforms = {k: None for k in TRANSFORM_PURPOSES}
 
-    if config is None:  # секция transform опущена — препроцесса нет
+    if config is None:  # transform section omitted — no preprocessing
         return transforms['train'], transforms['test']
 
     for key, cfg in config.items():
         if key not in TRANSFORM_PURPOSES:
             raise RuntimeError(f'purpose of transform must be one of {TRANSFORM_PURPOSES}')
 
-        if 'preprocess' in cfg.keys():  # preprocess внутри purpose опционален
+        if 'preprocess' in cfg.keys():  # preprocess within a purpose is optional
             transforms[key] = create_single_preprocess(cfg.preprocess)
 
     return transforms['train'], transforms['test']
@@ -119,7 +119,7 @@ def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwarg
 
 def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader, metric, preprocess, postprocess):
     ev_type = get_attr_from_module(config.module, config.type)
-    # Для текущих классификаторов используем только валидационный (test) даталоудер
+    # For the current classifiers we use only the validation (test) dataloader
     ev = ev_type(
         **_cfg_kwargs(config),
         net=net,
@@ -132,19 +132,19 @@ def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader,
 
 def create_datasets(config: DictConfig, train_augment, train_preprocess, test_augment, test_preprocess):
     """
-    Поддерживает:
+    Supports:
       data:
-        train: {...}  # одиночный train датасет
-        test:  {...}  # одиночный test датасет (старый формат)
+        train: {...}  # single train dataset
+        test:  {...}  # single test dataset (legacy format)
 
-    а также:
+    as well as:
       data:
         train: {...}
         test:
           incidents: {...}
           valA:      {...}
 
-    В последнем случае возвращает:
+    In the latter case it returns:
       train_dataset: Dataset
       test_dataset: Dict[str, Dataset]
     """
@@ -156,7 +156,7 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
             raise RuntimeError(f'purpose must be one of {DATASET_PURPOSES}')
 
         if purpose == PURPOSE_TRAIN:
-            # train всегда одиночный
+            # train is always single
             train_dataset = create_single_dataset(
                 cfg,
                 augment=train_augment,
@@ -164,7 +164,7 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
             )
 
         elif purpose == PURPOSE_TEST:
-            # Один test‑датасет (старый формат: module/type/config на верхнем уровне)
+            # A single test dataset (legacy format: module/type/config at the top level)
             if 'module' in cfg and 'type' in cfg:
                 test_dataset = create_single_dataset(
                     cfg,
@@ -172,7 +172,7 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
                     preprocess=test_preprocess,
                 )
             else:
-                # Несколько test‑датасетов: ключ -> под‑конфиг
+                # Several test datasets: key -> sub-config
                 test_dataset = {}
                 for name, sub_cfg in cfg.items():
                     test_dataset[name] = create_single_dataset(
@@ -243,17 +243,17 @@ def create_single_dataloader(config: DictConfig, dataset):
 
 
 def _pdeathsig_worker_init(worker_id, _user_fn=None):
-    """В воркере: PDEATHSIG (умирает вместе с рангом → не осиротеет и не держит
-    /dev/shm/RAM) + игнор SIGINT, затем пользовательский worker_init_fn, если был.
+    """In the worker: PDEATHSIG (dies together with its rank → won't be orphaned and won't
+    hold /dev/shm/RAM) + ignore SIGINT, then the user's worker_init_fn, if any.
 
-    SIGINT (Ctrl-C) идёт ВСЕЙ группе процессов. Если воркер умрёт от него первым,
-    главный процесс, ждущий батч в next(iterator), получит не KeyboardInterrupt, а
-    "DataLoader worker exited unexpectedly" → traceback вместо чистой остановки.
-    Поэтому воркер игнорирует SIGINT: прерывание обработает главный процесс, а
-    воркеров затем снимет PDEATHSIG.
+    SIGINT (Ctrl-C) goes to the WHOLE process group. If a worker dies from it first, the
+    main process waiting for a batch in next(iterator) gets not a KeyboardInterrupt but
+    "DataLoader worker exited unexpectedly" → a traceback instead of a clean shutdown.
+    That's why the worker ignores SIGINT: the interrupt is handled by the main process,
+    and the workers are then taken down by PDEATHSIG.
 
-    ВАЖНО: это модульная функция, а НЕ замыкание — иначе DataLoader с
-    ``multiprocessing_context='spawn'`` не смог бы её запиклить (регрессия 0.7.2)."""
+    IMPORTANT: this is a module-level function, NOT a closure — otherwise a DataLoader with
+    ``multiprocessing_context='spawn'`` could not pickle it (regression 0.7.2)."""
     import signal
     ddp.set_pdeathsig()
     try:
@@ -265,15 +265,15 @@ def _pdeathsig_worker_init(worker_id, _user_fn=None):
 
 
 def _worker_init_fn(user_fn=None):
-    # partial модульной функции — picklable (для spawn), в отличие от замыкания.
+    # partial of a module-level function — picklable (for spawn), unlike a closure.
     return partial(_pdeathsig_worker_init, _user_fn=user_fn)
 
 
 def _resolve_collate(cfg: dict) -> dict:
-    """Если ``dataloaders.*.config.collate_fn`` задан КОМПОНЕНТОМ (module/type/config) —
-    строим его (``create_universal`` -> callable) и подставляем в kwargs DataLoader.
-    Нужно для батчинга переменного размера (графы/сеты, напр. молекулярный докинг):
-    дефолтный collate стакает только одинаковые тензоры."""
+    """If ``dataloaders.*.config.collate_fn`` is given as a COMPONENT (module/type/config),
+    build it (``create_universal`` -> callable) and substitute it into the DataLoader kwargs.
+    Needed for variable-size batching (graphs/sets, e.g. molecular docking): the default
+    collate only stacks identically shaped tensors."""
     cf = cfg.get('collate_fn')
     if isinstance(cf, dict) and 'module' in cf and 'type' in cf:
         cfg['collate_fn'] = create_universal(OmegaConf.create(cf))
@@ -281,9 +281,10 @@ def _resolve_collate(cfg: dict) -> dict:
 
 
 def _require_multipart_loader(dataset, loader):
-    """MultiPartDataset индексируется КОРТЕЖЕМ (part, sample) — нужен MultiPartBatchSampler
-    (даёт MultiPartDataLoader). С обычным torch DataLoader он получит int-индексы -> невнятный
-    "'int' object is not subscriptable" из воркера. Ловим сразу понятной ошибкой (train И test)."""
+    """MultiPartDataset is indexed by a (part, sample) TUPLE — it needs a MultiPartBatchSampler
+    (provided by MultiPartDataLoader). With a plain torch DataLoader it receives int indices ->
+    a cryptic "'int' object is not subscriptable" from the worker. Catch it upfront with a clear
+    error (both train AND test)."""
     from echelon3.data.basic import MultiPartDataset
     if isinstance(dataset, MultiPartDataset):
         from echelon3.dataloaders.multipart import MultiPartBatchSampler
@@ -297,27 +298,27 @@ def _require_multipart_loader(dataset, loader):
 
 def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     """
-    Поддерживает:
+    Supports:
       dataloaders:
         train: {...}
         test:  {...}
 
-    и:
+    and:
       dataloaders:
         train: {...}
         test:
           incidents: {...}
           valA:      {...}
 
-    В последнем случае test_dataloader будет Dict[str, DataLoader],
-    что понимает доработанный Trainer.
+    In the latter case test_dataloader will be a Dict[str, DataLoader],
+    which the enhanced Trainer understands.
     """
-    # train — всегда одиночный
+    # train — always single
     train_dataloader_type = get_attr_from_module(config.train.module, config.train.type)
     train_cfg = OmegaConf.to_container(config.train.config, resolve=True) if 'config' in config.train else {}
 
     if ddp.is_ddp():
-        # Семантика конфига сохраняется: batch_size — глобальный, делим на ранки.
+        # Config semantics are preserved: batch_size is global, we split it across ranks.
         world = ddp.world_size()
         global_bs = int(train_cfg.get('batch_size', 1))
         if global_bs % world != 0:
@@ -328,15 +329,15 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         train_cfg['batch_size'] = global_bs // world
         from echelon3.data.basic import MultiPartDataset
         if isinstance(train_dataset, MultiPartDataset):
-            # MultiPartDataset индексируется КОРТЕЖЕМ (part, sample) — int-индексный
-            # DistributedSampler несовместим. Шардинг по рангам делает DDP-осведомлённый
-            # MultiPartBatchSampler (внутри MultiPartDataLoader), поэтому sampler не ставим;
-            # shuffle тоже его — убираем, чтобы не конфликтовал с batch_sampler.
+            # MultiPartDataset is indexed by a (part, sample) TUPLE — the int-indexed
+            # DistributedSampler is incompatible. Rank sharding is done by the DDP-aware
+            # MultiPartBatchSampler (inside MultiPartDataLoader), so we don't set a sampler;
+            # shuffle is also its job — we drop it so it doesn't conflict with batch_sampler.
             train_cfg.pop('shuffle', None)
             print(f'--> DDP dataloader: MultiPartDataset — per-part rank-sharding via '
                   f'MultiPartBatchSampler; per-process batch {train_cfg["batch_size"]} x {world} = {global_bs}')
         else:
-            # shuffle обеспечивает DistributedSampler (эксклюзивен с shuffle=True)
+            # shuffle is provided by DistributedSampler (mutually exclusive with shuffle=True)
             shuffle = bool(train_cfg.pop('shuffle', True))
             train_cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(
                 train_dataset, shuffle=shuffle, drop_last=bool(train_cfg.get('drop_last', False))
@@ -347,11 +348,11 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
 
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
         train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))
-        # По умолчанию держим воркеров живыми между эпохами. Иначе они переспавниваются
-        # каждую эпоху, и Ctrl-C на границе эпохи ловит их в момент bootstrap (spawn:
-        # import torch / pickle.load ДО нашего worker_init) — 4 трейсбека KeyboardInterrupt
-        # + утёкшие семафоры от полу-инициализированных процессов. setdefault — явное
-        # значение юзера не трогаем; ветка гарантирует num_workers>0 (иначе torch падает).
+        # By default we keep workers alive between epochs. Otherwise they are respawned
+        # every epoch, and Ctrl-C at an epoch boundary catches them mid-bootstrap (spawn:
+        # import torch / pickle.load BEFORE our worker_init) — 4 KeyboardInterrupt tracebacks
+        # + leaked semaphores from half-initialized processes. setdefault — we don't touch an
+        # explicit user value; this branch guarantees num_workers>0 (otherwise torch fails).
         train_cfg.setdefault('persistent_workers', True)
     _resolve_collate(train_cfg)
     train_dataloader = train_dataloader_type(dataset=train_dataset, **train_cfg)
@@ -361,33 +362,33 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     def _test_cfg(sub_cfg, dataset):
         cfg = OmegaConf.to_container(sub_cfg, resolve=True) if sub_cfg is not None else {}
         if ddp.is_ddp():
-            # Симметричная валидация: каждый ранк считает свой шард, метрики
-            # агрегируются torchmetrics'ом (dist_reduce_fx). Воркеры через spawn:
-            # без воркеров eval
-            # готовит данные одним потоком (минуты + все ранки ждут самого
-            # медленного на барьере синка метрик).
-            # fork-воркеры: spawn не может запиклить датасет (cv2.CLAHE внутри),
-            # а fork с NCCL безопасен эмпирически — train-лоадеры так работают.
+            # Symmetric validation: each rank computes its own shard, and metrics
+            # are aggregated by torchmetrics (dist_reduce_fx). Workers via spawn:
+            # without workers, eval
+            # prepares data on a single thread (minutes + every rank waits for the
+            # slowest one at the metric-sync barrier).
+            # fork workers: spawn can't pickle the dataset (cv2.CLAHE inside),
+            # while fork with NCCL is empirically safe — train loaders work this way.
             cfg['num_workers'] = min(int(cfg.get('num_workers', 4)), 4)
             cfg.pop('shuffle', None)
-            # batch_size конфига — глобальный (в DP его резал на карты сам
-            # DataParallel; полный батч 40 на одной карте = OOM в interpolate).
+            # config batch_size is global (in DP it was split across cards by
+            # DataParallel itself; a full batch of 40 on one card = OOM in interpolate).
             cfg['batch_size'] = max(1, int(cfg.get('batch_size', 1)) // ddp.world_size())
             from echelon3.data.basic import MultiPartDataset
-            if not isinstance(dataset, MultiPartDataset):     # MultiPart шардит свой batch_sampler
+            if not isinstance(dataset, MultiPartDataset):     # MultiPart shards via its own batch_sampler
                 cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False)
         if int(cfg.get('num_workers', 0) or 0) > 0:
             cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'))
-            # persistent_workers НЕ форсим для eval: валидация — не тугой per-epoch цикл
-            # (мотивация «Ctrl-C на границе эпохи» тут слабая), а резидентные eval-воркеры
-            # весь прогон рядом с train-воркерами (под DDP дефолт 4) зря держат RAM. Юзер
-            # может включить сам, если надо.
+            # We do NOT force persistent_workers for eval: validation is not a tight per-epoch
+            # loop (the "Ctrl-C at an epoch boundary" motivation is weak here), and resident
+            # eval workers alongside train workers for the whole run (default 4 under DDP)
+            # hold RAM for nothing. The user can enable it manually if needed.
         _resolve_collate(cfg)
         return cfg
 
-    # test — один или несколько
+    # test — one or several
     if isinstance(test_dataset, dict):
-        # несколько тест‑датасетов
+        # several test datasets
         test_dataloaders = {}
         for name, ds in test_dataset.items():
             sub_cfg = config.test[name]
@@ -396,7 +397,7 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             _require_multipart_loader(ds, test_dataloaders[name])
         return train_dataloader, test_dataloaders
     else:
-        # одиночный тест‑датасет (старый формат)
+        # single test dataset (legacy format)
         test_dataloader_type = get_attr_from_module(config.test.module, config.test.type)
         test_dataloader = test_dataloader_type(dataset=test_dataset, **_test_cfg(config.test.config if 'config' in config.test else None, test_dataset))
         _require_multipart_loader(test_dataset, test_dataloader)
@@ -418,9 +419,9 @@ def create_trainer(config: DictConfig, net: torch.nn.Module, optimizer: torch.op
     return trn
 
 def create_tabular_datasets(config: DictConfig):
-    """Табличные датасеты для fit/predict-ветки: обычные компоненты (create_universal),
-    БЕЗ инъекции картиночных augment/preprocess. Поддерживает один или несколько
-    (dict именованных) test-датасетов, как и картиночный create_datasets."""
+    """Tabular datasets for the fit/predict branch: ordinary components (create_universal),
+    WITHOUT injecting image augment/preprocess. Supports one or several (a dict of named)
+    test datasets, just like the image-based create_datasets."""
     train_dataset = create_universal(config.train)
     if 'test' not in config:
         return train_dataset, None
@@ -433,8 +434,8 @@ def create_tabular_datasets(config: DictConfig):
 
 def create_estimator_trainer(config: DictConfig, model, train_data, test_data, metrics,
                              ckpt_manager, feature_transform=None):
-    """Fit/predict-трейнер (EstimatorTrainer и родня): свои инъекции — model + целые
-    датасеты + метрики + ckpt-менеджер (+ опц. feature_transform), без
+    """Fit/predict trainer (EstimatorTrainer and kin): its own injections — model + whole
+    datasets + metrics + ckpt manager (+ optional feature_transform), without
     optimizer/loss/loaders/scheduler."""
     trainer_type = get_attr_from_module(config.module, config.type)
     return trainer_type(model=model, train_data=train_data, test_data=test_data,

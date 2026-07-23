@@ -1,5 +1,5 @@
-"""P0: fit/predict-путь (EstimatorTrainer) — таблица -> fit -> eval -> save-бандл ->
-инференс из бандла. Модель — sklearn (без внешних зависимостей)."""
+"""P0: fit/predict path (EstimatorTrainer) — table -> fit -> eval -> save bundle ->
+inference from the bundle. Model is sklearn (no external dependencies)."""
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -46,7 +46,7 @@ def test_estimator_end_to_end(tmp_path):
 
 
 def _frame_cat(n, seed):
-    """Категориальная строковая колонка + пропуски — сырьё, которое LogReg не съест."""
+    """Categorical string column + missing values — raw data that LogReg cannot digest."""
     rng = np.random.default_rng(seed)
     x1 = rng.normal(size=n)
     home = rng.choice(["own", "rent", "mortgage"], size=n)
@@ -54,7 +54,7 @@ def _frame_cat(n, seed):
     p = 1.0 / (1.0 + np.exp(-(1.2 * x1 + bump)))
     y = (rng.random(n) < p).astype(int)
     x1 = x1.copy()
-    x1[::37] = np.nan  # пропуски
+    x1[::37] = np.nan  # missing values
     return pd.DataFrame({"x1": x1, "home": home, "y": y})
 
 
@@ -68,10 +68,10 @@ def test_feature_transform_enables_categorical(tmp_path):
         ckpt_manager=CheckpointManager(path=str(tmp_path), checkpoints_to_keep=1),
         feature_transform=TabularPreprocessor(scale=True),   # impute+scale num, impute+onehot cat
     )
-    results = trainer.train()   # без feature_transform упало бы (строки + NaN)
+    results = trainer.train()   # without feature_transform this would fail (strings + NaN)
     assert results["test"]["auc"] > 0.5
 
-    # инференс из бандла ре-применяет тот же зафиченный трансформ
+    # inference from the bundle re-applies the same fitted transform
     bundle = load_bundle(str(tmp_path))
     assert bundle["feature_transform"] is not None
     preds = predict(bundle, _frame_cat(50, 2))
@@ -79,7 +79,7 @@ def test_feature_transform_enables_categorical(tmp_path):
 
 
 def test_multitarget_all_nan_target_skipped(tmp_path):
-    """M1: таргет со всеми-NaN в train не должен ронять весь ран — пропускаем его."""
+    """M1: a target that is all-NaN in train must not crash the whole run — we skip it."""
     import pytest
     from sklearn.linear_model import LinearRegression
     from echelon3.trainers.estimator import MultiTargetEstimatorTrainer
@@ -89,7 +89,7 @@ def test_multitarget_all_nan_target_skipped(tmp_path):
     n = 200
     df = pd.DataFrame({"x1": rng.normal(size=n), "x2": rng.normal(size=n)})
     df["ta"] = df["x1"] + rng.normal(0, 0.1, n)
-    df["tb"] = np.nan                                   # эндпоинт без измерений
+    df["tb"] = np.nan                                   # endpoint with no measurements
     trainer = MultiTargetEstimatorTrainer(
         model=LinearRegression(),
         train_data=TabularDataset(target=["ta", "tb"], frame=df),
@@ -97,12 +97,12 @@ def test_multitarget_all_nan_target_skipped(tmp_path):
         metrics={"mae": MAE()},
         ckpt_manager=CheckpointManager(path=str(tmp_path), checkpoints_to_keep=1),
     )
-    trainer.train()                                     # не падает на tb
-    assert set(load_bundle(str(tmp_path))["models"]) == {"ta"}   # tb пропущен
+    trainer.train()                                     # does not crash on tb
+    assert set(load_bundle(str(tmp_path))["models"]) == {"ta"}   # tb skipped
 
 
 def test_estimator_rejects_multitarget(tmp_path):
-    """m2: одиночный EstimatorTrainer не должен молча учить только первый из списка таргетов."""
+    """m2: a single EstimatorTrainer must not silently train on only the first of a list of targets."""
     import pytest
     df = pd.DataFrame({"x": np.arange(20.0), "y1": np.arange(20.0), "y2": np.arange(20.0)})
     trainer = EstimatorTrainer(

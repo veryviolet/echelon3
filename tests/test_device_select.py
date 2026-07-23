@@ -1,7 +1,7 @@
-"""resolve_single_device: одиночный (не-DDP) режим должен уважать индекс gpus[0],
-а не молча садиться на cuda:0 (баг 0.7.8 — gpus=[1] грузил GPU 0). cfg.device=cpu и
-отсутствие CUDA имеют приоритет. GPU не требуется: доступность CUDA передаётся
-параметром, а torch.device(...) не обращается к драйверу."""
+"""resolve_single_device: single (non-DDP) mode must honour the gpus[0] index
+rather than silently landing on cuda:0 (bug 0.7.8 — gpus=[1] loaded GPU 0). cfg.device=cpu
+and the absence of CUDA take precedence. No GPU required: CUDA availability is passed as a
+parameter, and torch.device(...) does not touch the driver."""
 from omegaconf import OmegaConf
 
 from echelon3.cli import resolve_single_device

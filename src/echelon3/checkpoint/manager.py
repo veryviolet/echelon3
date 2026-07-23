@@ -40,7 +40,7 @@ class CheckpointManager:
             ckpt = torch.load(
                 f,
                 map_location=device,
-                weights_only=False  # ВАЖНО: разрешаем загрузку полных объектов (модель, оптимизатор, метрики и т.д.)
+                weights_only=False  # IMPORTANT: allow loading full objects (model, optimizer, metrics, etc.)
             )
 
         return ckpt, latest_idx

@@ -73,13 +73,14 @@ class MultiHeadBinaryIoU(Metric, nn.Module):
             getattr(self, f"n_{h}").add_(1.0)
 
     def dist_reduce(self):
-        # DDP: свести сырые счётчики по рангам ПЕРЕД compute(). Валидация
-        # шардируется DistributedSampler'ом, base Metric.dist_reduce — no-op,
-        # поэтому compute() иначе видит только шард rank0. Пересечения/объединения
-        # аддитивны → SUM-all-reduce счётчиков даёт ТОЧНЫЙ глобальный IoU (усреднять
-        # по-шардовые IoU нельзя). n_{h} тоже редуцируем, иначе набор «увиденных»
-        # голов разойдётся по рангам и macro-mean пойдёт по разному знаменателю.
-        # all_reduce_sum_ — no-op вне distributed, так что одиночный GPU не задет.
+        # DDP: reduce the raw counters across ranks BEFORE compute(). Validation
+        # is sharded by DistributedSampler, and the base Metric.dist_reduce is a no-op,
+        # so otherwise compute() would see only rank0's shard. Intersections/unions
+        # are additive → a SUM all-reduce of the counters yields the EXACT global IoU
+        # (averaging per-shard IoUs is not allowed). We reduce n_{h} too, otherwise the
+        # set of "seen" heads would diverge across ranks and macro-mean would use a
+        # different denominator. all_reduce_sum_ is a no-op outside distributed, so a
+        # single GPU is unaffected.
         for h in self.head_names:
             all_reduce_sum_(
                 getattr(self, f"tp_{h}"), getattr(self, f"fp_{h}"),

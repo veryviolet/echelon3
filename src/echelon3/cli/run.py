@@ -37,7 +37,7 @@ def runner_app(cfg: DictConfig):
         print(f'--> Loading latest checkpoint... ')
         print(Fore.LIGHTGREEN_EX, end='')
         ckpt, num = ckpt_manager.load_latest_checkpoint()
-        # Снимает устаревший префикс 'module.' старых DataParallel/DDP-чекпоинтов.
+        # Strips the stale 'module.' prefix of old DataParallel/DDP checkpoints.
         ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
         net.to(device)
@@ -61,7 +61,7 @@ def runner_app(cfg: DictConfig):
     runner = create_universal(cfg.runner)
 
     print(f'--> Processing ... ')
-    # TF32 + AMP-инференс (по умолчанию bf16; precision: fp32 чтобы выключить).
+    # TF32 + AMP inference (bf16 by default; precision: fp32 to disable).
     runtime.setup_fast_matmul(
         tf32=cfg.get('tf32', True), cudnn_benchmark=cfg.get('cudnn_benchmark', True)
     )
@@ -73,7 +73,7 @@ def runner_app(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
-main = build_cli(runner_app)  # click-CLI + OmegaConf-оверрайды (взамен @hydra.main)
+main = build_cli(runner_app)  # click CLI + OmegaConf overrides (in place of @hydra.main)
 
 
 if __name__ == "__main__":

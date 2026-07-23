@@ -1,17 +1,17 @@
-"""Fit/predict-трейнер для табличных моделей (деревья CatBoost/XGBoost/LightGBM,
-табличные foundation-модели TabPFN/TabICL/TabFM/TabGPT — все sklearn-совместимые
+"""Fit/predict trainer for tabular models (CatBoost/XGBoost/LightGBM trees,
+tabular foundation models TabPFN/TabICL/TabFM/TabGPT — all sklearn-compatible
 in-context/fit-predict).
 
-Это ОТДЕЛЬНОЕ семейство трейнеров: оно НЕ наследует картиночный
-``echelon3.trainers.baseline.Trainer`` и не использует его SGD-машинерию — нет
-optimizer/loss/scheduler/DataLoader/эпох. Objective/loss у таких моделей — это
-ГИПЕРПАРАМЕТР самой модели (``model.config``, напр. CatBoost ``loss_function``), а не
-отдельная секция ``loss:``.
+This is a SEPARATE family of trainers: it does NOT inherit the image-oriented
+``echelon3.trainers.baseline.Trainer`` and does not use its SGD machinery — there is no
+optimizer/loss/scheduler/DataLoader/epochs. For such models the objective/loss is a
+HYPERPARAMETER of the model itself (``model.config``, e.g. CatBoost ``loss_function``), not
+a separate ``loss:`` section.
 
-Жизненный цикл: взять весь ``(X, y)`` из train-датасета → ``model.fit`` → предсказать и
-посчитать метрики на каждом test-датасете → сохранить self-contained inference-бандл
-(модель + имена признаков + target) тем же CheckpointManager (.tar), что и остальной
-echelon3. Бандл грузится для инференса/экспорта (см. ``echelon3.inference.tabular``).
+Lifecycle: take the whole ``(X, y)`` from the train dataset → ``model.fit`` → predict and
+compute metrics on each test dataset → save a self-contained inference bundle
+(model + feature names + target) with the same CheckpointManager (.tar) as the rest of
+echelon3. The bundle is loaded for inference/export (see ``echelon3.inference.tabular``).
 """
 import numpy as np
 from colorama import Fore
@@ -20,7 +20,7 @@ CHECKPOINT_ESTIMATOR_KEYWORD = "estimator_bundle"
 
 
 def _fmt(v) -> str:
-    """Компактное число: до 4 знаков без хвостовых нулей, научная запись для крайних."""
+    """Compact number: up to 4 digits with no trailing zeros, scientific notation for extremes."""
     try:
         f = float(v)
     except (TypeError, ValueError):
@@ -32,13 +32,13 @@ def _fmt(v) -> str:
 
 
 class EstimatorTrainer:
-    """Обучение fit/predict-моделей в идеологии echelon3.
+    """Training of fit/predict models in the echelon3 style.
 
-    Инъекции (даёт ``assemble_estimator`` в CLI): ``model``, ``train_data``,
-    ``test_data`` (один датасет или dict именованных), ``metrics`` (dict), ``ckpt_manager``.
-    Через ``config:``: ``keep_best_on`` (метрика для отчёта о лучшем), ``fit_kwargs``
-    (доп. аргументы ``model.fit``), ``eval_set`` (bool — прокинуть первый test как eval_set
-    в fit для ранней остановки), ``use_categorical`` (bool — прокинуть ``cat_features``).
+    Injections (provided by ``assemble_estimator`` in the CLI): ``model``, ``train_data``,
+    ``test_data`` (a single dataset or a dict of named ones), ``metrics`` (dict), ``ckpt_manager``.
+    Via ``config:``: ``keep_best_on`` (metric to report the best on), ``fit_kwargs``
+    (extra arguments for ``model.fit``), ``eval_set`` (bool — pass the first test set as eval_set
+    to fit for early stopping), ``use_categorical`` (bool — pass ``cat_features``).
     """
 
     def __init__(self, model, train_data, test_data, metrics, ckpt_manager,
@@ -62,8 +62,8 @@ class EstimatorTrainer:
 
     # ------------------------------------------------------------------ predict
     def _scores(self, X, model=None):
-        """Вероятность положительного класса (классификатор) или сырой predict
-        (регрессор). model=None -> self.model."""
+        """Probability of the positive class (classifier) or raw predict
+        (regressor). model=None -> self.model."""
         model = model if model is not None else self.model
         if hasattr(model, "predict_proba"):
             p = np.asarray(model.predict_proba(X))
@@ -80,8 +80,8 @@ class EstimatorTrainer:
                 "EstimatorTrainer received a multi-target dataset (target is a list) — use "
                 "echelon3.trainers.estimator.MultiTargetEstimatorTrainer instead")
 
-        # Препроцессинг признаков: фитим на train, применяем к тестам (без утечки), кладём
-        # зафиченным в бандл. Держит смену движка сменой только model: даже на категориях.
+        # Feature preprocessing: fit on train, apply to the test sets (no leakage), store the
+        # fitted transform in the bundle. Lets you switch engines by changing only model: even on categoricals.
         if self.feature_transform is not None:
             print(f"--> Fitting feature_transform ({type(self.feature_transform).__name__})...")
             Xtr = self.feature_transform.fit_transform(Xtr, ytr)
@@ -100,8 +100,8 @@ class EstimatorTrainer:
         try:
             self.model.fit(Xtr, ytr, **fit_kwargs)
         except TypeError:
-            # Модель не приняла АВТО-добавленные eval_set/cat_features — снимаем только их
-            # (пользовательские config.fit_kwargs сохраняем) и фитим повторно.
+            # The model did not accept the AUTO-added eval_set/cat_features — drop only those
+            # (keep the user's config.fit_kwargs) and refit.
             stripped = {k: v for k, v in fit_kwargs.items() if k not in ("eval_set", "cat_features")}
             print("--> model.fit rejected eval_set/cat_features — refitting without them")
             self.model.fit(Xtr, ytr, **stripped)
@@ -130,7 +130,7 @@ class EstimatorTrainer:
 
     # --------------------------------------------------------------------- save
     def _save(self, results):
-        """Self-contained inference-бандл (.tar через тот же CheckpointManager)."""
+        """Self-contained inference bundle (.tar via the same CheckpointManager)."""
         self.ckpt.init_storage()
         bundle = {
             CHECKPOINT_ESTIMATOR_KEYWORD: {
@@ -151,7 +151,7 @@ class EstimatorTrainer:
             kb = self.keep_best_on
             if isinstance(kb, str):
                 kb = [kb]
-            elif hasattr(kb, "keys"):          # dict-форма keep_best_on
+            elif hasattr(kb, "keys"):          # dict form of keep_best_on
                 kb = list(kb.keys())
             tracked = {k: first_set[k] for k in (kb or []) if k in first_set}
             if tracked:
@@ -159,18 +159,18 @@ class EstimatorTrainer:
         print(Fore.LIGHTGREEN_EX + f"--> Saved inference bundle to {self.ckpt.path}{best}" + Fore.CYAN)
 
     def close(self):
-        # нет воркеров/ресурсов — заглушка ради совместимости с CLI (trainer.close()).
+        # no workers/resources — a stub for CLI compatibility (trainer.close()).
         pass
 
 
 class MultiTargetEstimatorTrainer(EstimatorTrainer):
-    """Много таргетов за один ран (напр. 9 ADMET-эндпоинтов): на каждый target — своя
-    копия модели (``sklearn.base.clone``), обучается на строках, где таргет измерен
-    (NaN-маска; ADMET-данные разрежены). Метрики считаются per-target. Общий
-    ``feature_transform`` (напр. SmilesFeaturizer) фитится ОДИН раз и переиспользуется.
-    Бандл: ``{target: model}`` + общий feature_transform.
+    """Many targets in a single run (e.g. 9 ADMET endpoints): each target gets its own
+    copy of the model (``sklearn.base.clone``), trained on the rows where the target is measured
+    (NaN mask; ADMET data is sparse). Metrics are computed per target. A shared
+    ``feature_transform`` (e.g. SmilesFeaturizer) is fitted ONCE and reused.
+    Bundle: ``{target: model}`` + the shared feature_transform.
 
-    Конфиг тот же, что у EstimatorTrainer, но ``data.*.config.target`` — СПИСОК эндпоинтов.
+    Same config as EstimatorTrainer, but ``data.*.config.target`` is a LIST of endpoints.
     """
 
     def train(self):

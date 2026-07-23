@@ -1,7 +1,7 @@
-"""Хук distributed-редукции метрик (echelon3 0.7.7): база — no-op, all_reduce_sum_
-безопасен вне DDP, кастомная метрика может свести буферы перед compute().
-Полный многоранговый путь тут не проверить (1 процесс); проверяем контракт и
-no-op-безопасность вне распределённого контекста."""
+"""Metric distributed-reduction hook (echelon3 0.7.7): the base is a no-op, all_reduce_sum_
+is safe outside DDP, and a custom metric can reduce its buffers before compute().
+The full multi-rank path can't be tested here (single process); we check the contract and
+no-op safety outside a distributed context."""
 import torch
 
 from echelon3.metrics.base import Metric, all_reduce_sum_
@@ -9,12 +9,12 @@ from echelon3.metrics.base import Metric, all_reduce_sum_
 
 def test_all_reduce_sum_is_noop_without_distributed():
     t = torch.tensor([1.0, 2.0, 3.0])
-    all_reduce_sum_(t)  # torch.distributed не инициализирован -> no-op
+    all_reduce_sum_(t)  # torch.distributed not initialized -> no-op
     assert torch.equal(t, torch.tensor([1.0, 2.0, 3.0]))
 
 
 class _AccMetric(Metric, torch.nn.Module):
-    """IoU-подобная метрика на аккумуляторах: dist_reduce = SUM-all-reduce буферов."""
+    """IoU-like metric over accumulators: dist_reduce = SUM all-reduce of the buffers."""
 
     def __init__(self):
         torch.nn.Module.__init__(self)
@@ -51,7 +51,7 @@ def test_custom_metric_dist_reduce_runs_and_computes():
     p = torch.tensor([1.0, 1.0, 0.0])
     t = torch.tensor([1.0, 0.0, 0.0])
     m.update(p, t)
-    m.dist_reduce()          # вне DDP — буферы не меняются
+    m.dist_reduce()          # outside DDP — buffers are unchanged
     assert abs(m.compute() - (1.0 / 2.0)) < 1e-6
 
 
@@ -63,6 +63,6 @@ def test_multihead_binary_iou_dist_reduce_single_process():
     labels = {"road": torch.tensor([[[1, 0], [1, 0]]])}            # (1,2,2)
     m.update(preds, labels)
     iou_before = m.compute()
-    m.dist_reduce()  # вне DDP — no-op, счётчики не меняются
+    m.dist_reduce()  # outside DDP — no-op, counters are unchanged
     assert m.compute() == iou_before
     assert abs(iou_before - 2.0 / 3.0) < 1e-6  # tp=2, fp=1, fn=0

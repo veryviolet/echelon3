@@ -2,14 +2,14 @@
 
 https://arxiv.org/pdf/1905.07852
 
-Дифференцируемая аппроксимация L_BD, штрафующая отклонение границ
-prediction от GT на основе Sobel-ish градиента (вычисляется через
-конволюции конструированными ядрами). Дёшево, хорошо работает на
-тонких водных и road-границах.
+A differentiable approximation of L_BD that penalizes the deviation of the
+prediction boundaries from GT based on a Sobel-ish gradient (computed via
+convolutions with hand-built kernels). Cheap, works well on
+thin water and road boundaries.
 
-Реализация: для каждой головы считаем gradient maps prediction и GT
-(magnitude через Sobel-фильтр), затем считаем precision/recall между
-ними, потом F1-ish.
+Implementation: for each head we compute gradient maps of the prediction and GT
+(magnitude via a Sobel filter), then compute precision/recall between
+them, then F1-ish.
 """
 from __future__ import annotations
 
@@ -25,10 +25,10 @@ _SOBEL_Y = torch.tensor([[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]]).
 
 
 def _sobel_magnitude(x: torch.Tensor) -> torch.Tensor:
-    """Sobel градиент-magnitude, нормализованный в [0, 1].
-    Для бинарной маски max sobel ≈ sqrt(2)*4 ≈ 5.66; делим на 4 и clamp,
-    чтобы precision/recall в boundary-F1 не вылезали за 1.0
-    (иначе loss=1-F1 становится отрицательным и оптимизатор «учится в минус»).
+    """Sobel gradient magnitude, normalized to [0, 1].
+    For a binary mask, max sobel ≈ sqrt(2)*4 ≈ 5.66; we divide by 4 and clamp,
+    so that precision/recall in the boundary F1 do not exceed 1.0
+    (otherwise loss=1-F1 becomes negative and the optimizer "learns in reverse").
     """
     kx = _SOBEL_X.to(x.device, x.dtype)
     ky = _SOBEL_Y.to(x.device, x.dtype)
@@ -43,12 +43,12 @@ def _max_pool(x: torch.Tensor, k: int) -> torch.Tensor:
 
 
 class MultiHeadBoundaryWithIgnore(nn.Module):
-    """Boundary F1-loss для multi-binary-head.
+    """Boundary F1 loss for a multi-binary head.
 
     Args:
-        theta: радиус «тёплой» зоны для precision/recall совпадения границ
-            (учитываем близкие, не только pixel-perfect).
-        smooth: стабилизатор.
+        theta: radius of the "warm" zone for precision/recall boundary matching
+            (we count nearby matches, not only pixel-perfect ones).
+        smooth: stabilizer.
     """
 
     def __init__(
@@ -93,7 +93,7 @@ class MultiHeadBoundaryWithIgnore(nn.Module):
             gt = gt.unsqueeze(1)
             b_pred = _sobel_magnitude(prob)
             b_gt = _sobel_magnitude(gt)
-            # «расширенная» граница для соседства
+            # "dilated" boundary for the neighborhood
             b_pred_d = _max_pool(b_pred, k=2 * self.theta + 1)
             b_gt_d = _max_pool(b_gt, k=2 * self.theta + 1)
             precision = (torch.sum(b_pred * b_gt_d) + self.smooth) / (torch.sum(b_pred) + self.smooth)

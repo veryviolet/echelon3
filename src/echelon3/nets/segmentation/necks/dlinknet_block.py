@@ -1,16 +1,16 @@
 """D-LinkNet-style dilated central block, wrapping FPN-like neck.
 
-Идея D-LinkNet (Zhou DeepGlobe 2018): параллельные dilated-3x3-convs с
-дилатациями (1,2,4,8) применяются к самой глубокой (наиболее семантической)
-фичемапе ДО fusion в FPN. Эффект: расширенное receptive field вдоль длинных
-линейных структур (дороги, реки), без увеличения числа сэмплов или потери
-пространственного разрешения.
+D-LinkNet idea (Zhou DeepGlobe 2018): parallel dilated 3x3 convs with
+dilations (1,2,4,8) are applied to the deepest (most semantic)
+feature map BEFORE fusion in the FPN. The effect: an enlarged receptive field along long
+linear structures (roads, rivers), without increasing the number of samples or losing
+spatial resolution.
 
-Здесь — обёртка над FPNLikeNeck: принимает тот же список фич, применяет dilated
-блок к feats[-1] (deepest), затем штатный FPN-merge.
+Here it is a wrapper around FPNLikeNeck: it takes the same list of features, applies the dilated
+block to feats[-1] (deepest), then does the regular FPN merge.
 
-Параметров мало: 4 × 3x3 conv (out_channels × out_channels) + 1 проекционный 1x1.
-Для 960→64 это ≈ 4 × 64×64×9 = 147k параметров — копейка.
+Few parameters: 4 × 3x3 conv (out_channels × out_channels) + 1 projection 1x1.
+For 960→64 this is ≈ 4 × 64×64×9 = 147k parameters — a pittance.
 """
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ import torch.nn.functional as F
 
 
 class DLinkNetCenterBlock(nn.Module):
-    """Параллельные dilated-3x3-convs + объединение через сумму.
-    in_channels == out_channels; пространственный размер сохраняется."""
+    """Parallel dilated 3x3 convs + merge via summation.
+    in_channels == out_channels; the spatial size is preserved."""
 
     def __init__(self, channels: int, dilations=(1, 2, 4, 8)):
         super().__init__()
@@ -45,11 +45,11 @@ class DLinkNetCenterBlock(nn.Module):
 
 
 class DLinkNetFPNLikeNeck(nn.Module):
-    """FPN-like neck + D-LinkNet dilated центр-блок над глубочайшей фичей.
+    """FPN-like neck + D-LinkNet dilated center block over the deepest feature.
 
-    Поведение совместимо с FPNLikeNeck (тот же in/out), просто feats[-1]
-    предварительно проходит через DLinkNetCenterBlock после проекции 1x1
-    в общий out_channels."""
+    Behavior is compatible with FPNLikeNeck (same in/out); feats[-1] simply
+    passes through DLinkNetCenterBlock first, after a 1x1 projection
+    into the shared out_channels."""
 
     def __init__(
         self,
@@ -69,7 +69,7 @@ class DLinkNetFPNLikeNeck(nn.Module):
 
     def forward(self, feats: List[torch.Tensor]) -> torch.Tensor:
         projected = [p(f) for p, f in zip(self.projs, feats)]
-        # D-LinkNet блок на самой глубокой (последней) фиче — расширение RF.
+        # D-LinkNet block on the deepest (last) feature — RF expansion.
         projected[-1] = self.center(projected[-1])
         target_size = projected[0].shape[2:]
         out = projected[0]

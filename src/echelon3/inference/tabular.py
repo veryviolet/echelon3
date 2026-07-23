@@ -1,9 +1,9 @@
-"""Инференс табличной модели из self-contained бандла, сохранённого
+"""Inference for a tabular model from the self-contained bundle saved by
 ``echelon3.trainers.estimator.EstimatorTrainer``.
 
-Бандл (модель + имена признаков + target) кладётся тем же CheckpointManager в .tar.
-Здесь — загрузка (файл .tar или директория target: берём последний checkpoint) и
-предсказание на новых данных (DataFrame или путь к таблице через TabularDataset).
+The bundle (model + feature names + target) is stored in a .tar by the same CheckpointManager.
+Here: loading (a .tar file or a target directory: we take the latest checkpoint) and
+prediction on new data (a DataFrame or a path to a table via TabularDataset).
 """
 import glob
 import os
@@ -15,7 +15,7 @@ from echelon3.trainers.estimator import CHECKPOINT_ESTIMATOR_KEYWORD
 
 
 def load_bundle(path):
-    """Грузит бандл из .tar-файла или из директории (последний checkpoint-*.tar)."""
+    """Loads the bundle from a .tar file or from a directory (the latest checkpoint-*.tar)."""
     if os.path.isdir(path):
         files = glob.glob(os.path.join(path, "checkpoint-*.tar"))
         if not files:
@@ -36,13 +36,13 @@ def _predict_one(model, X):
 
 
 def predict(bundle, data):
-    """Предсказание на новых данных.
+    """Prediction on new data.
 
-    ``data`` — DataFrame, ndarray, или путь к таблице (тогда читаем через TabularDataset
-    по сохранённым в бандле именам признаков). Single-target -> ndarray. Multi-target
-    (бандл с ``models``) -> ``{target: ndarray}``. Классификатор -> вероятность класса 1,
-    регрессор -> сырой predict. Сохранённый feature_transform (напр. SmilesFeaturizer)
-    ре-применяется автоматически.
+    ``data`` — a DataFrame, ndarray, or a path to a table (in which case we read it via
+    TabularDataset using the feature names stored in the bundle). Single-target -> ndarray.
+    Multi-target (a bundle with ``models``) -> ``{target: ndarray}``. Classifier -> probability
+    of class 1, regressor -> raw predict. A stored feature_transform (e.g. SmilesFeaturizer)
+    is re-applied automatically.
     """
     features = bundle.get("features") or []
     if isinstance(data, str):
