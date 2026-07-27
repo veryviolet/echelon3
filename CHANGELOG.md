@@ -4,6 +4,25 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.5 — 2026-07-27
+
+### Added
+
+- **`PairEvaluator` — a pair-input evaluator, the `evaluate` counterpart of `PairTrainer`.**
+  Two-image ("image-in-image") models take a `(base, query)` pair, but the generic
+  `Evaluator` calls `net(single_input)`, so `echelon3 evaluate` couldn't score them (the
+  metric was never fed, yielding `None`). `echelon3.evaluators.pair.PairEvaluator` mirrors
+  `PairTrainer`'s forward: it installs `pair_collate_fn` to keep pairs paired, calls
+  `net(base, query)` (forwarding a positional return-features flag when
+  `config.return_features: true`), and feeds the metric `(prediction, gt)` — cast to fp32
+  and dim-normalised exactly as training's validation does, so an eval score matches the
+  train-time validation score. The metric itself is supplied by config, as in `train`;
+  the evaluator stays task-agnostic.
+  ```yaml
+  evaluator: { module: echelon3.evaluators.pair, type: PairEvaluator,
+               config: { return_features: false }, metric: <name> }
+  ```
+
 ## 0.10.4 — 2026-07-27
 
 ### Fixed
