@@ -4,6 +4,19 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.1 — 2026-07-27
+
+### Fixed
+
+- **Stateful losses are now moved onto the trainer device.** The net and metrics were
+  moved to `device`, but `self._losses` was assigned as-is. A loss carrying a buffer or
+  parameter — `CrossEntropyLoss(weight=…)`, `BCEWithLogitsLoss(pos_weight=…)` (both common
+  for class imbalance), or a learnable loss such as ArcFace — kept that state on CPU while
+  predictions were on cuda, so the forward crashed with a device mismatch. Stateless losses
+  never hit this (no buffers), which is why it went unnoticed. The trainer now calls
+  `loss.to(device)` on each `nn.Module` loss (a no-op for stateless ones; non-Module
+  callables are left as-is), mirroring how the net and metrics are handled.
+
 ## 0.10.0 — 2026-07-23
 
 ### Added

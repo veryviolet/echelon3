@@ -186,7 +186,16 @@ class Trainer:
             # i.e. within each process the net is single-device.
             self._net = net
         self._eval_net = None  # unwrapped net for rank0 validation in DDP
-        self._losses = losses
+        # Move stateful losses onto the device, like the net and metrics. A loss with a
+        # buffer/parameter — CrossEntropyLoss(weight=…), BCEWithLogitsLoss(pos_weight=…),
+        # learnable losses like ArcFace — otherwise keeps that state on CPU while
+        # predictions are on cuda, and the forward fails with a device mismatch. Stateless
+        # losses (MSELoss, plain CrossEntropyLoss) move as a harmless no-op; a non-Module
+        # callable loss is left as-is.
+        self._losses = {
+            name: (loss.to(self._device) if isinstance(loss, torch.nn.Module) else loss, weight)
+            for name, (loss, weight) in losses.items()
+        }
         self._metrics = metrics
         self._optimizer = optimizer
         self._scheduler = scheduler
