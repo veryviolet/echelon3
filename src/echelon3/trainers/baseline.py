@@ -353,6 +353,29 @@ class Trainer:
         }
         return predictions, losses_values
 
+    def _log_train_step_data(self, source, labels, predictions):
+        """Per-step data hook for the mlops logger (images/boxes/heatmaps). Overridable so
+        trainers with non-tensor shapes (e.g. MultiHeadTrainer's dict labels/predictions,
+        which the tensor-oriented loggers can't render) can skip it without touching the
+        precision/scaler/backward path in one_step_train."""
+        self._logger.log_train_data(self._global_step, source, labels, predictions)
+
+    def _log_test_step_data(self, source, labels, predictions):
+        """Validation counterpart of :meth:`_log_train_step_data`."""
+        self._logger.log_test_data(self._global_step, source, labels, predictions)
+
+    @staticmethod
+    def _loader_num_batches(loader):
+        """Number of batches in a loader (this rank's shard under DDP) — the unit for progress
+        bars. Falls back for custom loaders without ``__len__`` (e.g. MultiPartDataLoader)."""
+        try:
+            return len(loader)
+        except TypeError:
+            bs = getattr(loader, "batch_size", None)
+            if bs is not None:
+                return int(np.ceil(1.0 * len(loader.dataset) / bs))
+            return loader.total_batches()
+
     def one_step_train(self, source, labels):
         def closure(**kwargs):
             self._optimizer.zero_grad(set_to_none=True)
@@ -367,7 +390,7 @@ class Trainer:
             else:
                 total_loss.backward()
             self.losses_without_weights = {m: v[0] for m, v in losses_values.items()}
-            self._logger.log_train_data(self._global_step, source, labels, predictions)
+            self._log_train_step_data(source, labels, predictions)
             self._logger.log_train_losses(self._global_step, self.losses_without_weights)
             return total_loss
 
@@ -667,7 +690,7 @@ class Trainer:
             predictions, losses_values = self.compute_losses(source, labels, net=net)
         # Compute metrics in fp32: after autocast the outputs may be bf16/fp16.
         predictions = runtime.to_float32(predictions)
-        self._logger.log_test_data(self._global_step, source, labels, predictions)
+        self._log_test_step_data(source, labels, predictions)
         return predictions, losses_values
 
     def set_to_device(self, source, labels):
@@ -795,15 +818,16 @@ class Trainer:
                 else:
                     metrics_for_loader = dict(single_metrics)
 
-                sampler = getattr(loader, "sampler", None)
-                if isinstance(sampler, torch.utils.data.distributed.DistributedSampler):
-                    total_size = len(sampler)  # this rank's shard
-                else:
-                    total_size = len(loader.dataset)
+                # Progress in BATCHES (not samples): a non-tensor source (a dataclass, a
+                # variable-size graph batch) has no .size(0), so a sample-based step would
+                # advance by 1 per batch against a sample total and look like validation
+                # stopped early (silent truncation). Batches are uniform across source shapes
+                # and match the training bar.
+                total_batches = self._loader_num_batches(loader)
 
                 train_progress = tqdm(
                     initial=0,
-                    total=total_size,
+                    total=total_batches,
                     desc=f"--> Evaluating [{loader_name}]",
                     ncols=0,
                     dynamic_ncols=True,
@@ -845,16 +869,7 @@ class Trainer:
                         if loader_name in getattr(mm, "datasets", []):
                             mm.update(predictions, labels, dataset=loader_name)
 
-                    if isinstance(source, list):
-                        batch_size = source[0].size(0) if isinstance(
-                            source[0], torch.Tensor
-                        ) else 1
-                    else:
-                        batch_size = source.size(0) if isinstance(
-                            source, torch.Tensor
-                        ) else 1
-
-                    train_progress.update(batch_size)
+                    train_progress.update(1)
 
                 # DDP: reduce the distributed state of custom metrics across ranks
                 # BEFORE compute() (validation is sharded via DistributedSampler).

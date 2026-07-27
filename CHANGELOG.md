@@ -4,6 +4,27 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.3 — 2026-07-27
+
+### Fixed
+
+- **MultiHeadTrainer no longer silently disables mixed precision.** It overrode
+  `one_step_train` / `one_step_validate` with hand-rolled copies that dropped the base's
+  `torch.autocast` context (and the fp16 GradScaler) — so a run configured for bf16/fp16 ran
+  in fp32 while the banner reported AMP was on (double the memory, half the throughput, no
+  warning). It now overrides only `compute_losses` (the seam the base runs inside autocast),
+  inheriting the base step's precision/scaler/closure path unchanged. The tensor-only
+  image/data logger it needs to skip moved to overridable `_log_{train,test}_step_data`
+  hooks, so skipping it no longer means re-implementing the step. (This also removes an
+  incidental double-logging of validation losses.)
+- **Validation progress bar no longer looks truncated for non-tensor batches.** `validate()`
+  sized the bar in samples but advanced it by the batch's `source.size(0)`, which fell back
+  to 1 for a non-tensor `source` (a dataclass, a variable-size graph batch) — so the bar
+  crawled (e.g. "30/968") and looked like validation stopped early, mimicking a metric-
+  inflating truncation bug. It now counts batches (`len(loader)`, one step per batch),
+  uniform across source shapes and matching the training bar. Display only — the data was
+  always read in full.
+
 ## 0.10.2 — 2026-07-27
 
 ### Fixed
