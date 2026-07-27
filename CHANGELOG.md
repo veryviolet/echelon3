@@ -4,6 +4,21 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.4 — 2026-07-27
+
+### Fixed
+
+- **`echelon3 evaluate` now accepts a named dict of test sets, like `train`.** `data.test`
+  can be a single set or a named dict (`{test: {...}, test_ms: {...}}`); `train` supports
+  both, but `evaluate` assumed a single set and read `data.test.module`, so a multi-test
+  config that trains fine crashed with an opaque `omegaconf … Missing key module`. `evaluate`
+  now resolves the same two formats: for a named dict it evaluates each set (pairing it with
+  its `dataloaders.test` entry) with a fresh metric + evaluator and prints
+  `Validation [name] <metric>: …` per set; a single set is unchanged. A named set without a
+  matching `dataloaders.test` loader — or an empty `data.test` — now raises a clear error
+  instead of the opaque one. The dataloader info line also tolerates a loader with no
+  `config` block.
+
 ## 0.10.3 — 2026-07-27
 
 ### Fixed

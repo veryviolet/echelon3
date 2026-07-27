@@ -23,6 +23,31 @@ from echelon3.creator import (
 )
 
 
+def _resolve_test_sets(data_test, loaders_test):
+    """Normalise `data.test` / `dataloaders.test` into a list of ``(name, data_cfg,
+    loader_cfg)``. Accepts BOTH formats `train` accepts:
+
+      * a single test set — `module`/`type`/`config` at the top level (legacy `evaluate`);
+      * a dict of named sets — ``{test: {...}, test_ms: {...}}`` — with a matching
+        `dataloaders.test` entry per name.
+
+    Raises a clear error when named sets lack their loaders, instead of the opaque
+    ``Missing key module`` that `create_single_dataset` produced for a dict `data.test`."""
+    if "module" in data_test and "type" in data_test:
+        return [("test", data_test, loaders_test)]
+    names = list(data_test.keys())
+    if not names:
+        raise RuntimeError("data.test is empty — nothing to evaluate.")
+    missing = [n for n in names if n not in loaders_test]
+    if missing:
+        raise RuntimeError(
+            f"data.test declares named test sets {names}, but dataloaders.test has no loader "
+            f"for {missing}. Give each named test set a matching dataloaders.test entry "
+            f"(same layout as `train`)."
+        )
+    return [(n, data_test[n], loaders_test[n]) for n in names]
+
+
 def evaluate_app(cfg: DictConfig):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,64 +95,61 @@ def evaluate_app(cfg: DictConfig):
         print(f"        {tr}")
     print(Fore.CYAN, end="")
 
-    print(f"--> Initializing validation dataset (data.test)... ")
-    test_dataset = create_single_dataset(
-        cfg.data.test, augment=test_augment, preprocess=test_preprocess
-    )
-    print(Fore.LIGHTGREEN_EX, end="")
-    print(f"        {test_dataset}")
-    print(Fore.CYAN, end="")
-
-    print(f"--> Initializing validation dataloader... ")
-    test_dataloader = create_single_dataloader(cfg.dataloaders.test, test_dataset)
-    print(Fore.LIGHTGREEN_EX, end="")
-    print(f"        {type(test_dataloader).__name__}({cfg.dataloaders.test.config})")
-    print(Fore.CYAN, end="")
-
-    print(f"--> Initializing metric... ")
-    metric = None
-    for m in cfg.metrics:
-        name = list(m.keys())[0]
-        if name == cfg.evaluator.metric:
-            metric = create_universal(m[cfg.evaluator.metric])
-            break
-    if metric is None:
-        raise RuntimeError(
-            f"Metric '{cfg.evaluator.metric}' not found in cfg.metrics."
-        )
-
-    print(f"--> Initializing postprocess... ")
-    postprocess = []
-
-    print(f"--> Initializing evaluator... ")
-    evaluator = create_evaluator(
-        cfg.evaluator,
-        net=net,
-        train_dataloader=None,
-        test_dataloader=test_dataloader,
-        metric=metric,
-        preprocess=test_preprocess,
-        postprocess=postprocess,
-    )
-
-    print(Fore.LIGHTGREEN_EX, end="")
-    print(f"        {type(evaluator).__name__}({cfg.evaluator})")
-    print(Fore.CYAN, end="")
-
-    print(f"--> Evaluating on validation (data.test)... ")
-    # TF32 + AMP inference: bf16 by default on supporting GPUs (precision: fp32
-    # to disable). autocast around the top-level call covers all Evaluators.
+    # TF32 + AMP inference: bf16 by default on supporting GPUs (precision: fp32 to disable).
+    # autocast around the top-level call covers all Evaluators.
     runtime.setup_fast_matmul(
         tf32=cfg.get("tf32", True), cudnn_benchmark=cfg.get("cudnn_benchmark", True)
     )
     _dtype = runtime.resolve_amp_dtype(cfg.get("precision", "auto"), device=device)
     print(f"--> Precision: {runtime.precision_label(_dtype)}")
-    with torch.autocast("cuda", dtype=_dtype or torch.bfloat16, enabled=_dtype is not None):
-        val_metric = evaluator.evaluate()
 
-    print(Fore.LIGHTGREEN_EX, end="")
-    print(f"Validation {cfg.evaluator.metric}: {val_metric}")
-    print(Fore.CYAN, end="")
+    def _build_metric():
+        for m in cfg.metrics:
+            if list(m.keys())[0] == cfg.evaluator.metric:
+                return create_universal(m[cfg.evaluator.metric])
+        raise RuntimeError(f"Metric '{cfg.evaluator.metric}' not found in cfg.metrics.")
+
+    # data.test / dataloaders.test may be a single set OR a named dict of sets — the same
+    # two formats `train` accepts. Evaluate each set with its own fresh metric + evaluator.
+    single = "module" in cfg.data.test and "type" in cfg.data.test
+    test_sets = _resolve_test_sets(cfg.data.test, cfg.dataloaders.test)
+
+    for set_name, data_cfg, loader_cfg in test_sets:
+        tag = "" if single else f" [{set_name}]"
+
+        print(f"--> Initializing test dataset{tag} (data.test)... ")
+        test_dataset = create_single_dataset(
+            data_cfg, augment=test_augment, preprocess=test_preprocess
+        )
+        print(Fore.LIGHTGREEN_EX, end="")
+        print(f"        {test_dataset}")
+        print(Fore.CYAN, end="")
+
+        print(f"--> Initializing test dataloader{tag}... ")
+        test_dataloader = create_single_dataloader(loader_cfg, test_dataset)
+        print(Fore.LIGHTGREEN_EX, end="")
+        print(f"        {type(test_dataloader).__name__}({loader_cfg.get('config', {})})")
+        print(Fore.CYAN, end="")
+
+        metric = _build_metric()   # fresh per set — no cross-set state accumulation
+
+        print(f"--> Initializing evaluator{tag}... ")
+        evaluator = create_evaluator(
+            cfg.evaluator,
+            net=net,
+            train_dataloader=None,
+            test_dataloader=test_dataloader,
+            metric=metric,
+            preprocess=test_preprocess,
+            postprocess=[],
+        )
+
+        print(f"--> Evaluating{tag}... ")
+        with torch.autocast("cuda", dtype=_dtype or torch.bfloat16, enabled=_dtype is not None):
+            val_metric = evaluator.evaluate()
+        print(Fore.LIGHTGREEN_EX, end="")
+        print(f"Validation{tag} {cfg.evaluator.metric}: {val_metric}")
+        print(Fore.CYAN, end="")
 
     print(Style.RESET_ALL)
 
