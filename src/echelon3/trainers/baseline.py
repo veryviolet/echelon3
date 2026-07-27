@@ -985,6 +985,52 @@ class Trainer:
         if ddp.is_ddp():
             self._eval_net = None
 
+    _OPT_HPARAMS = ("lr", "weight_decay", "betas", "momentum", "eps",
+                    "nesterov", "dampening", "amsgrad", "alpha", "rho", "lr_decay")
+
+    def _warn_config_hparams_overridden(self, cfg_groups, loaded_groups):
+        """On resume, the checkpoint's optimizer state (lr, weight_decay, …) overrides the
+        config values the optimizer was just built from. Meanwhile non-optimizer config
+        (e.g. batch_size) DOES apply — so a run can silently mix new and old settings and
+        still look like it honoured the new config. Warn per overridden hyperparameter,
+        pointing at `trainer.config.reset: true`. Rank 0 only."""
+        if not ddp.is_main():
+            return
+
+        def _scalar(v):
+            return v.item() if torch.is_tensor(v) and v.numel() == 1 else v
+
+        def _differs(a, b):
+            a, b = _scalar(a), _scalar(b)          # fused/capturable opts store lr as a tensor
+            if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+                return list(a) != list(b)          # betas may round-trip tuple<->list
+            return a != b
+
+        # With an LR scheduler the live `lr` is the DECAYED value it last set, and the
+        # checkpoint legitimately restores that trajectory — comparing it to the config's
+        # base LR would warn on every scheduled resume. So compare the BASE LR (`initial_lr`,
+        # which the scheduler stamps on each group) instead: warn only when the config's base
+        # LR actually changed. weight_decay/betas/… are untouched by LR schedulers.
+        has_sched = self._scheduler is not None
+        diffs = []
+        for i, (cg, lg) in enumerate(zip(cfg_groups, loaded_groups)):
+            for k in self._OPT_HPARAMS:
+                key = "initial_lr" if (k == "lr" and has_sched) else k
+                if key in cg and key in lg and _differs(cg[key], lg[key]):
+                    grp = f" (param group {i})" if len(loaded_groups) > 1 else ""
+                    diffs.append(f"{k}{grp}: config {_scalar(cg[key])} -> checkpoint {_scalar(lg[key])}")
+        if not diffs:
+            return
+        print(Fore.YELLOW, end="")
+        print("--> WARNING: resume restored optimizer state from the checkpoint, so these "
+              "config optimizer hyperparameters were NOT applied:")
+        for d in diffs:
+            print(f"      - {d}")
+        print("    Other config (e.g. batch_size) DID apply, so the run mixes new and old "
+              "settings. Set trainer.config.reset: true to start fresh from the config "
+              "hyperparameters while keeping the checkpoint weights.")
+        print(Fore.CYAN, end="")
+
     def load_from_checkpoint(self):
         ckpt, num = self._ckpt_manager.load_latest_checkpoint()
         # Strips the obsolete 'module.' prefix (old DataParallel/DDP checkpoints).
@@ -996,7 +1042,11 @@ class Trainer:
             self._global_step = 1
         else:
             self._current_epoch = ckpt[CHECKPOINT_EPOCH_KEYWORD]
+            # Snapshot the config-built hyperparameters BEFORE the checkpoint overwrites them,
+            # then warn on every value the resume silently overrides (see the method).
+            cfg_groups = [dict(g) for g in self._optimizer.param_groups]
             self._optimizer.load_state_dict(ckpt[CHECKPOINT_OPTIMIZER_KEYWORD])
+            self._warn_config_hparams_overridden(cfg_groups, self._optimizer.param_groups)
             if self._scheduler is not None:
                 sched_state = ckpt.get(CHECKPOINT_SCHEDULER_KEYWORD) or self._scheduler.state_dict()
                 self._scheduler.load_state_dict(sched_state)

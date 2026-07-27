@@ -4,6 +4,22 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.2 — 2026-07-27
+
+### Fixed
+
+- **Resume now warns when the checkpoint overrides config optimizer hyperparameters.** On
+  resume (`reset=False`) the checkpoint's optimizer state restores `lr` / `weight_decay` /
+  etc., silently overriding the config values the optimizer was just built from — while
+  *other* config (e.g. `batch_size`) still applies. A run could therefore look like it
+  honoured a new config but actually mix new and old settings (new batch size, old LR). The
+  trainer now snapshots the config-built hyperparameters before restoring the checkpoint and
+  prints a rank-0 warning listing each one the checkpoint overrides, pointing at
+  `trainer.config.reset: true` (keep the weights, restart optimizer/scheduler/epoch from the
+  config). When an LR scheduler is in use the comparison uses the base LR (`initial_lr`), so
+  a normal scheduled resume does not warn on the decayed learning rate — only a genuine
+  base-LR change does. Fused/capturable optimizers (LR stored as a tensor) are handled too.
+
 ## 0.10.1 — 2026-07-27
 
 ### Fixed
