@@ -171,14 +171,19 @@ class Trainer:
                 print(f"--> torch.compile: on (mode={compile_mode or 'default'}) — "
                       "first steps recompile (warmup)")
 
+        # find_unused_parameters defaults to False (torch's own default). True forces an extra
+        # autograd-graph traversal every iteration and torch warns it "can adversely affect
+        # performance"; it is only needed when a net genuinely leaves some parameters out of
+        # the loss on a step (branchy / conditional heads). If a net does that with the default,
+        # DDP raises a clear error telling you to enable it — set trainer.config
+        # .ddp_find_unused_parameters: true then.
+        self._ddp_find_unused_parameters = bool(kwargs.get("ddp_find_unused_parameters", False))
         if ddp.is_ddp():
             # DDP: one process = one GPU (the net is already on the device).
-            # find_unused_parameters=True by default: on some nets part of the
-            # outputs may not participate in the loss on individual steps.
             self._net = torch.nn.parallel.DistributedDataParallel(
                 net,
                 device_ids=[device.index] if device.type == "cuda" else None,
-                find_unused_parameters=bool(kwargs.get("ddp_find_unused_parameters", True)),
+                find_unused_parameters=self._ddp_find_unused_parameters,
             )
         else:
             # Single GPU / CPU — no wrapper. DataParallel was removed; multiple GPUs

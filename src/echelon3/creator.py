@@ -238,13 +238,29 @@ def create_scheduler(config: DictConfig, optimizer: torch.optim.Optimizer):
 
 def create_single_dataloader(config: DictConfig, dataset):
     dataloader_type = get_attr_from_module(config.module, config.type)
-    return dataloader_type(dataset=dataset, **_cfg_kwargs(config))
+    kwargs = _cfg_kwargs(config)
+    # threads_per_worker is not a DataLoader kwarg — pop it (else the constructor raises
+    # TypeError) and use it to cap the workers' intra-op threads, so the `evaluate` path gets
+    # the same oversubscription fix as `train` (see create_dataloaders / _pdeathsig_worker_init).
+    threads = int(kwargs.pop('threads_per_worker', 1))
+    if int(kwargs.get('num_workers', 0) or 0) > 0:
+        kwargs['worker_init_fn'] = _worker_init_fn(kwargs.get('worker_init_fn'), threads)
+    return dataloader_type(dataset=dataset, **kwargs)
 
 
 
-def _pdeathsig_worker_init(worker_id, _user_fn=None):
-    """In the worker: PDEATHSIG (dies together with its rank → won't be orphaned and won't
-    hold /dev/shm/RAM) + ignore SIGINT, then the user's worker_init_fn, if any.
+def _pdeathsig_worker_init(worker_id, _user_fn=None, _threads=1):
+    """In the worker: cap intra-op threads, PDEATHSIG (dies together with its rank → won't be
+    orphaned and won't hold /dev/shm/RAM), ignore SIGINT, then the user's worker_init_fn.
+
+    Thread cap (``_threads``, default 1): each library otherwise spins a pool sized to the
+    MACHINE's core count inside every worker — ``cv2.getNumThreads()`` and
+    ``torch.get_num_threads()`` both default to all cores — so N workers oversubscribe the
+    CPU ~N×cores-fold. That thrashes on context switches, starves the GPU of batches, and can
+    slow an epoch several-fold with no error in the log. DataLoader already gives the
+    parallelism (one process per worker), so each worker should be single-threaded — the same
+    thing mmcv / detectron2 / ultralytics do. Override with
+    ``dataloaders.*.config.threads_per_worker``.
 
     SIGINT (Ctrl-C) goes to the WHOLE process group. If a worker dies from it first, the
     main process waiting for a batch in next(iterator) gets not a KeyboardInterrupt but
@@ -255,6 +271,16 @@ def _pdeathsig_worker_init(worker_id, _user_fn=None):
     IMPORTANT: this is a module-level function, NOT a closure — otherwise a DataLoader with
     ``multiprocessing_context='spawn'`` could not pickle it (regression 0.7.2)."""
     import signal
+    n = max(1, int(_threads))
+    try:
+        torch.set_num_threads(n)
+    except Exception:
+        pass
+    try:
+        import cv2
+        cv2.setNumThreads(0 if n == 1 else n)   # 0 = disable OpenCV's own threading
+    except Exception:
+        pass
     ddp.set_pdeathsig()
     try:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -264,9 +290,9 @@ def _pdeathsig_worker_init(worker_id, _user_fn=None):
         _user_fn(worker_id)
 
 
-def _worker_init_fn(user_fn=None):
+def _worker_init_fn(user_fn=None, threads_per_worker=1):
     # partial of a module-level function — picklable (for spawn), unlike a closure.
-    return partial(_pdeathsig_worker_init, _user_fn=user_fn)
+    return partial(_pdeathsig_worker_init, _user_fn=user_fn, _threads=threads_per_worker)
 
 
 def _resolve_collate(cfg: dict) -> dict:
@@ -346,8 +372,11 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
                   f'{train_cfg["batch_size"]}/process x {world} processes '
                   f'(num_workers={train_cfg.get("num_workers", 0)} per process)')
 
+    # Pop threads_per_worker unconditionally (it is not a DataLoader kwarg, so it must never
+    # reach the loader) — used only when there are workers to cap their intra-op threads.
+    _train_threads = int(train_cfg.pop('threads_per_worker', 1))
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
-        train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'))
+        train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'), _train_threads)
         # By default we keep workers alive between epochs. Otherwise they are respawned
         # every epoch, and Ctrl-C at an epoch boundary catches them mid-bootstrap (spawn:
         # import torch / pickle.load BEFORE our worker_init) — 4 KeyboardInterrupt tracebacks
@@ -377,8 +406,9 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             from echelon3.data.basic import MultiPartDataset
             if not isinstance(dataset, MultiPartDataset):     # MultiPart shards via its own batch_sampler
                 cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False)
+        _threads = int(cfg.pop('threads_per_worker', 1))   # never a DataLoader kwarg — see train
         if int(cfg.get('num_workers', 0) or 0) > 0:
-            cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'))
+            cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'), _threads)
             # We do NOT force persistent_workers for eval: validation is not a tight per-epoch
             # loop (the "Ctrl-C at an epoch boundary" motivation is weak here), and resident
             # eval workers alongside train workers for the whole run (default 4 under DDP)

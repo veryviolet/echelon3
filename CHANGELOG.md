@@ -4,6 +4,32 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.6 — 2026-08-04
+
+### Fixed
+
+- **DataLoader workers no longer oversubscribe the CPU.** Each worker inherited a thread pool
+  sized to the machine's core count (`cv2.getNumThreads()` and `torch.get_num_threads()` both
+  default to all cores), so `num_workers` workers spun up ~`num_workers × cores` threads —
+  e.g. 28 workers on 32 cores → ~1600 threads thrashing on context switches, the GPU starved
+  at 0%, and an epoch several times slower, all with no error in the log. The injected
+  worker-init now caps each worker to a single intra-op thread (`torch.set_num_threads(1)` +
+  `cv2.setNumThreads(0)`), as mmcv / detectron2 / ultralytics do; the DataLoader itself
+  provides the parallelism. Override per loader with
+  `dataloaders.<split>.config.threads_per_worker` (default 1). Applies to `train`, in-training
+  validation, and `evaluate`.
+
+### Changed
+
+- **`find_unused_parameters` now defaults to `false` under DDP (was `true`)** — matching
+  torch's own default. `true` forces an extra autograd-graph traversal every iteration (torch
+  itself warns it "can adversely affect performance") and is only needed for nets that leave
+  some parameters out of the loss on a step (branchy / conditional heads). **Migration:** if a
+  DDP run of such a net starts erroring with *"Expected to have finished reduction … enable
+  `find_unused_parameters=True`"*, set `trainer.config.ddp_find_unused_parameters: true`. Nets
+  that use all parameters every step (the common case, including `MultiHeadTrainer`) just get
+  the speedup and lose torch's warning.
+
 ## 0.10.5 — 2026-07-27
 
 ### Added
