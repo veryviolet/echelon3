@@ -74,9 +74,10 @@ class CheckpointManager:
         return self._idxs
 
 
-CHECKPOINT_EPOCH_KEYWORD = 'epoch'
+CHECKPOINT_EPOCH_KEYWORD = 'epoch'            # COMPLETED epochs at save time (0 = initial baseline)
 CHECKPOINT_MODEL_KEYWORD = 'model_state_dict'
 CHECKPOINT_OPTIMIZER_KEYWORD = 'optimizer_state_dict'
 CHECKPOINT_SCHEDULER_KEYWORD = 'scheduler_state_dict'
 CHECKPOINT_METRICS_KEYWORD = 'metrics'
 CHECKPOINT_SCALER_KEYWORD = 'scaler_state_dict'
+CHECKPOINT_GLOBAL_STEP_KEYWORD = 'global_step'  # also marks the new epoch=completed format

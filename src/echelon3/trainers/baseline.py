@@ -18,6 +18,7 @@ from echelon3.checkpoint.manager import (
     CHECKPOINT_SCHEDULER_KEYWORD,
     CHECKPOINT_METRICS_KEYWORD,
     CHECKPOINT_SCALER_KEYWORD,
+    CHECKPOINT_GLOBAL_STEP_KEYWORD,
 )
 
 from echelon3.mlops.basic import MLOpsLogger
@@ -74,7 +75,8 @@ class Trainer:
 
     _times_to_validate_per_epoch = None
 
-    _current_epoch = None
+    _current_epoch = None       # 1-based epoch currently being trained
+    _completed_epochs = 0        # epochs fully finished (what save_checkpoint records as `epoch`)
 
     _device = None
 
@@ -263,7 +265,7 @@ class Trainer:
         if len(ckpts_idxs) == 0:
             print(" Starting from scratch.")
             self._current_epoch = 1
-            self._global_step = 1
+            self._global_step = 0   # nothing trained yet — the initial baseline is step 0
             self.initialize_network()
         else:
             print(f" Found checkpoints {ckpts_idxs}")
@@ -278,8 +280,13 @@ class Trainer:
         # a measurement after part of the first epoch. validate_and_check_for_saving() itself
         # calls validate(), prints "Initial metrics baseline …" (best is still None) and
         # saves the baseline checkpoint that further training must beat.
+        #
+        # The baseline records COMPLETED epochs: 0 for a fresh run, the loaded count on resume
+        # (_current_epoch is the next epoch to run). So the step-0 checkpoint is `epoch=0`, no
+        # longer colliding with the `epoch=1` one saved after the first real epoch.
+        self._completed_epochs = self._current_epoch - 1
         self.prepare_network_for_validation()
-        self.validate_and_check_for_saving()
+        self.validate_and_check_for_saving(initial=True)
         self.prepare_network_for_train()
 
         while self._current_epoch <= self._epochs:
@@ -291,7 +298,8 @@ class Trainer:
             return
         self._ckpt_manager.save_checkpoint(
             {
-                CHECKPOINT_EPOCH_KEYWORD: self._current_epoch,
+                CHECKPOINT_EPOCH_KEYWORD: self._completed_epochs,
+                CHECKPOINT_GLOBAL_STEP_KEYWORD: self._global_step,
                 CHECKPOINT_MODEL_KEYWORD: ddp.state_dict_for_save(self._net),
                 CHECKPOINT_OPTIMIZER_KEYWORD: self._optimizer.state_dict(),
                 CHECKPOINT_SCHEDULER_KEYWORD: self._scheduler.state_dict() if self._scheduler is not None else None,
@@ -477,6 +485,12 @@ class Trainer:
                 train_progress.close()
                 self._log_trained(batch + 1, total_batches)
 
+                # Epoch is finished only when this validation is the last batch; a mid-epoch
+                # checkpoint records the PREVIOUS completed epoch (resume replays this one).
+                self._completed_epochs = (
+                    self._current_epoch if (batch + 1 == total_batches)
+                    else self._current_epoch - 1
+                )
                 self.prepare_network_for_validation()
                 self.validate_and_check_for_saving()
                 self.prepare_network_for_train()
@@ -634,7 +648,7 @@ class Trainer:
 
         return True
 
-    def validate_and_check_for_saving(self):
+    def validate_and_check_for_saving(self, initial=False):
         self.validate()
 
         # After the dist sync of metrics the values are identical on all ranks — the keep-best
@@ -642,6 +656,12 @@ class Trainer:
 
         # if keep_best_on is not set — save every time
         if self._keep_best_config is None or not self._keep_best_config:
+            if initial and ddp.is_main():
+                # Otherwise the initial baseline saves silently here (the "Initial …" message
+                # lived only in the keep_best branch), so it looked like it wasn't saved.
+                print(Fore.LIGHTGREEN_EX, end="")
+                print(f"--> Initial baseline (epoch {self._completed_epochs}). Saving checkpoint.")
+                print(Fore.CYAN, end="")
             self.save_checkpoint()
             return
 
@@ -1059,9 +1079,19 @@ class Trainer:
         if self._reset:
             print("--> Resetting.\n")
             self._current_epoch = 1
-            self._global_step = 1
+            self._global_step = 0
         else:
-            self._current_epoch = ckpt[CHECKPOINT_EPOCH_KEYWORD]
+            new_format = CHECKPOINT_GLOBAL_STEP_KEYWORD in ckpt
+            if new_format:
+                # New format (>= 0.10.7): stored `epoch` is COMPLETED epochs, so resume the
+                # NEXT one — a finished epoch N no longer re-runs. global_step is restored (and
+                # recomputed from the epoch by recalculate_start_of_epoch_global_step anyway).
+                self._current_epoch = int(ckpt[CHECKPOINT_EPOCH_KEYWORD]) + 1
+                self._global_step = int(ckpt[CHECKPOINT_GLOBAL_STEP_KEYWORD])
+            else:
+                # Legacy checkpoint: stored `epoch` is the in-progress epoch — keep the old
+                # semantics so an existing run resumes exactly as before (no epoch skipped).
+                self._current_epoch = int(ckpt[CHECKPOINT_EPOCH_KEYWORD])
             # Snapshot the config-built hyperparameters BEFORE the checkpoint overwrites them,
             # then warn on every value the resume silently overrides (see the method).
             cfg_groups = [dict(g) for g in self._optimizer.param_groups]
@@ -1070,6 +1100,21 @@ class Trainer:
             if self._scheduler is not None:
                 sched_state = ckpt.get(CHECKPOINT_SCHEDULER_KEYWORD) or self._scheduler.state_dict()
                 self._scheduler.load_state_dict(sched_state)
+                if new_format:
+                    # An end-of-epoch checkpoint is saved BEFORE that epoch's scheduler.step()
+                    # (step is at the end of train_epoch, after the save), so the stored
+                    # scheduler lags the completed-epoch count by one. The old resume re-ran the
+                    # epoch and its trailing step() caught up; resuming at N+1 must reconcile it
+                    # here, or every post-resume epoch trains one LR step behind. The scheduler
+                    # is stepped once per completed epoch, so last_epoch == completed epochs;
+                    # advance it by the shortfall (0 for mid-epoch/initial, 1 for end-of-epoch).
+                    completed = int(ckpt[CHECKPOINT_EPOCH_KEYWORD])
+                    last = int(getattr(self._scheduler, "last_epoch", completed))
+                    import warnings as _warnings
+                    with _warnings.catch_warnings():
+                        _warnings.simplefilter("ignore")  # "step before optimizer.step" is expected here
+                        for _ in range(max(0, completed - last)):
+                            self._scheduler.step()
             if ckpt.get(CHECKPOINT_SCALER_KEYWORD):
                 try:
                     self._scaler.load_state_dict(ckpt[CHECKPOINT_SCALER_KEYWORD])

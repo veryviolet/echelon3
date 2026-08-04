@@ -4,6 +4,31 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.7 — 2026-08-04
+
+### Fixed
+
+- **Checkpoint epoch/step metadata and resume semantics.** The initial validation added in
+  0.8.7 runs before training with `_current_epoch=1`, and `save_checkpoint` stored that as the
+  epoch — so the step-0 baseline checkpoint was labelled `epoch=1`, colliding with the one
+  saved after the first real epoch (also `epoch=1`), and `resume` from a checkpoint of a
+  *completed* epoch N re-ran epoch N (an off-by-one that silently repeated an epoch). Now:
+  - the stored `epoch` is the number of **completed** epochs (`0` for the initial baseline,
+    `N` after epoch N) — the baseline no longer collides with after-epoch-1;
+  - `global_step` is **persisted** in the checkpoint (and doubles as the new-format marker);
+  - resume from a new-format checkpoint starts the **next** epoch (completed `N` → epoch
+    `N+1`), no longer re-running a finished epoch;
+  - the scheduler is **reconciled** on resume: an end-of-epoch checkpoint is saved before that
+    epoch's `scheduler.step()`, so its stored scheduler lagged by one; resume now advances it
+    to match the completed-epoch count, so the LR schedule continues correctly instead of
+    running one step behind;
+  - the "save every checkpoint" path (no `keep_best_on`) now **announces** the initial
+    baseline save (`--> Initial baseline (epoch 0). Saving checkpoint.`) instead of saving
+    silently.
+
+  **Backward compatibility:** pre-0.10.7 checkpoints (no `global_step` key) resume with the
+  old semantics unchanged — no epoch is skipped for an in-progress run mid-upgrade.
+
 ## 0.10.6 — 2026-08-04
 
 ### Fixed
