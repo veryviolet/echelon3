@@ -218,6 +218,32 @@ class Trainer:
         self._float_labels = float_labels
         self._reset = reset
 
+        # ---- optional torch.profiler (opt-in: trainer.config.profile) ----
+        # Parsed on ALL ranks so the "stop after the profiling window" decision stays in
+        # lockstep under DDP (each rank runs the same number of steps). Only the profiling
+        # rank(s) actually build a profiler object (see _make_profiler).
+        self._profiler = None
+        self._profile_steps_done = 0
+        self._profile_steps_target = 0
+        self._profile_stop_requested = False
+        pc = kwargs.get("profile", None)
+        pc = dict(pc) if pc else None
+        self._profile_on = bool(pc) and pc.get("enabled") is not False
+        if self._profile_on:
+            self._profile_wait = int(pc.get("wait", 5))
+            self._profile_warmup = int(pc.get("warmup", 3))
+            self._profile_active = int(pc.get("active", 10))
+            self._profile_repeat = max(1, int(pc.get("repeat", 1)))
+            self._profile_dir = str(pc.get("dir", "./profiler_traces"))
+            self._profile_all_ranks = bool(pc.get("all_ranks", False))
+            self._profile_record_shapes = bool(pc.get("record_shapes", True))
+            self._profile_memory = bool(pc.get("profile_memory", False))
+            self._profile_with_stack = bool(pc.get("with_stack", False))
+            self._profile_stop_after = bool(pc.get("stop_after", True))
+            self._profile_steps_target = (
+                self._profile_wait + self._profile_warmup + self._profile_active
+            ) * self._profile_repeat
+
         # --- mixed precision (AMP) --- bound to the actual device.
         self._amp_dtype = runtime.resolve_amp_dtype(kwargs.get("precision", "auto"), device=self._device)
         # fp16 requires a GradScaler, which is incompatible with closure optimizers
@@ -289,9 +315,77 @@ class Trainer:
         self.validate_and_check_for_saving(initial=True)
         self.prepare_network_for_train()
 
-        while self._current_epoch <= self._epochs:
-            self.train_epoch()
-            self._current_epoch += 1
+        self._profiler = self._make_profiler()
+        if self._profiler is not None:
+            self._profiler.start()
+        try:
+            while self._current_epoch <= self._epochs:
+                self.train_epoch()
+                if self._profile_stop_requested:
+                    # A dedicated profiling run (profile.stop_after): the window is done, stop
+                    # the (throwaway) run without advancing the epoch (train_epoch broke out of
+                    # its batch loop mid-epoch). All ranks reach this at the same step, so no
+                    # DDP divergence.
+                    if ddp.is_main():
+                        print("--> Profiler: window complete, stopping run (profile.stop_after).")
+                    break
+                self._current_epoch += 1
+        finally:
+            if self._profiler is not None:
+                self._profiler.stop()
+                self._profiler = None
+
+    def _make_profiler(self):
+        """Build a torch.profiler when trainer.config.profile is set (opt-in), else None.
+
+        Quantifies where a step's time goes — compute vs NCCL comm vs dataloader wait — e.g.
+        to measure DDP scaling on no-NVLink hardware. By default profiles rank 0 only (its
+        trace already contains the allreduce/compute/dataloader picture) and stops the run
+        after the schedule window; set `all_ranks: true` / `stop_after: false` to change that.
+        Traces (Chrome / TensorBoard format) are written to `profile.dir`."""
+        if not self._profile_on:
+            return None
+        if ddp.is_ddp() and not ddp.is_main() and not self._profile_all_ranks:
+            return None
+        import os
+        from torch.profiler import (
+            profile, schedule, ProfilerActivity, tensorboard_trace_handler,
+        )
+        os.makedirs(self._profile_dir, exist_ok=True)
+        activities = [ProfilerActivity.CPU]
+        if torch.cuda.is_available():
+            activities.append(ProfilerActivity.CUDA)
+        _handler = tensorboard_trace_handler(self._profile_dir)
+
+        def _on_ready(prof):
+            _handler(prof)
+            if ddp.is_main():
+                print(Fore.LIGHTGREEN_EX, end="")
+                print(f"--> Profiler: trace written to {self._profile_dir}")
+                print(Fore.CYAN, end="")
+
+        return profile(
+            activities=activities,
+            schedule=schedule(
+                wait=self._profile_wait, warmup=self._profile_warmup,
+                active=self._profile_active, repeat=self._profile_repeat,
+            ),
+            on_trace_ready=_on_ready,
+            record_shapes=self._profile_record_shapes,
+            profile_memory=self._profile_memory,
+            with_stack=self._profile_with_stack,
+        )
+
+    def _profiler_step(self):
+        """Advance the profiler one step (if this rank profiles) and, for a stop_after run,
+        request the run to stop once the window is done. The step COUNT is tracked on every
+        rank (not just the profiling one), so the stop decision is identical across ranks."""
+        if self._profiler is not None:
+            self._profiler.step()
+        if self._profile_steps_target:
+            self._profile_steps_done += 1
+            if self._profile_stop_after and self._profile_steps_done >= self._profile_steps_target:
+                self._profile_stop_requested = True
 
     def save_checkpoint(self):
         if not ddp.is_main():
@@ -465,6 +559,9 @@ class Trainer:
             self.one_step_train(source, labels)
 
             self._global_step += 1
+            self._profiler_step()
+            if self._profile_stop_requested:
+                break   # dedicated profiling run: window done (see train())
 
             if self.losses_without_weights is not None:
                 train_progress.set_postfix(
