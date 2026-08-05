@@ -4,6 +4,32 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.8 — 2026-08-05
+
+### Added
+
+- **DDP performance levers for bandwidth-limited interconnects (consumer GPUs, PCIe without
+  NVLink).** On such boxes DDP's per-step gradient all-reduce runs at a fraction of NVLink
+  bandwidth (measured ~7 GB/s over PCIe vs ~47 GB/s NVLink on 3090, ~210 GB/s on H200), so for
+  a small net the sync is largely exposed and adding GPUs scales poorly. New opt-in knobs under
+  `trainer.config`:
+  - **`grad_accum_steps: N`** (default 1) — run the optimizer every N micro-batches (effective
+    batch = N × batch_size). Under DDP the all-reduce is skipped (`no_sync`) on the N-1
+    non-boundary micro-steps and done ONCE per window, so gradient sync happens N× less often —
+    the biggest lever when comm-bound. Not supported with closure optimizers (SAM/LBFGS) or
+    cleanly with `ddp_find_unused_parameters: true` (warned).
+  - **`ddp_comm: bf16 | fp16 | none`** (default none) — register a DDP gradient-compression
+    comm hook that halves the all-reduce payload (≈2× faster sync).
+  - **`ddp_gradient_as_bucket_view: true`** (default) — reduce gradients in place in the bucket
+    (less memory, small speed win); overridable.
+  - **`numa_affinity: true`** (default off) — pin each rank to its GPU's NUMA-node CPUs before
+    the dataloaders spawn, cutting cross-socket traffic on multi-socket boxes. Best-effort;
+    correctly maps the CUDA-visible index to the physical GPU under `CUDA_VISIBLE_DEVICES`.
+- **Opt-in `torch.profiler` hook (`trainer.config.profile`).** Profiles a short
+  wait/warmup/active window and writes a Chrome/TensorBoard trace (to `profile.dir`) that
+  separates compute vs NCCL all-reduce vs dataloader wait — for quantifying DDP scaling. Rank 0
+  by default; `stop_after: true` ends the (throwaway) run once the window is captured.
+
 ## 0.10.7 — 2026-08-04
 
 ### Fixed
