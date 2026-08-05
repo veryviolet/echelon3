@@ -95,6 +95,12 @@ def _finetune(cfg: DictConfig):
         device_ids = None
         if not ddp.is_main():
             sys.stdout = open(os.devnull, 'w')
+        # Optional NUMA/CPU affinity (see cli/train.py): pin the rank to its GPU's NUMA node
+        # before the dataloaders spawn. Opt-in: trainer.config.numa_affinity: true.
+        if _tcfg.get('numa_affinity', False) and device.type == 'cuda':
+            ok = ddp.set_numa_affinity(device.index)
+            if ddp.is_main():
+                print(f"--> NUMA affinity: {'pinned each rank to its GPU NUMA-node CPUs' if ok else 'requested but GPU→NUMA mapping unavailable; left unset'}")
     else:
         device = resolve_single_device(cfg, torch.cuda.is_available())
         if device.type == 'cuda' and device.index is not None:

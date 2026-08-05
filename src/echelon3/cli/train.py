@@ -125,6 +125,18 @@ def _train(cfg: DictConfig):
         device_ids = None
         if not ddp.is_main():
             sys.stdout = open(os.devnull, 'w')  # only rank 0 prints
+        # Optional NUMA/CPU affinity: pin this rank to its GPU's NUMA-node cores BEFORE the
+        # dataloaders spawn (workers inherit it). Cuts cross-socket traffic on multi-socket
+        # boxes without NVLink. Opt-in: trainer.config.numa_affinity: true. Best-effort.
+        if _tcfg.get('numa_affinity', False) and device.type == 'cuda':
+            ok = ddp.set_numa_affinity(device.index)
+            if ddp.is_main():
+                if ok:
+                    print(f"--> NUMA affinity: each rank pinned to its GPU's NUMA-node CPUs "
+                          f"(rank 0 → {len(os.sched_getaffinity(0))} cores)")
+                else:
+                    print("--> NUMA affinity requested but the GPU→NUMA mapping was "
+                          "unavailable (install pynvml or ensure nvidia-smi+sysfs); left unset")
     else:
         device = resolve_single_device(cfg, torch.cuda.is_available())
         if device.type == 'cuda' and device.index is not None:

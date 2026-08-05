@@ -25,6 +25,97 @@ import torch
 import torch.distributed as dist
 
 
+def _parse_cpulist(s: str):
+    """Parse a Linux cpulist string like '0-15,32-47' into a list of CPU ids."""
+    cpus = []
+    for part in str(s).strip().split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            cpus.extend(range(int(a), int(b) + 1))
+        else:
+            cpus.append(int(part))
+    return cpus
+
+
+def _visible_to_physical_gpu(index: int):
+    """Translate a CUDA-visible device index (what torch calls cuda:{index}) to the PHYSICAL
+    GPU index that pynvml / nvidia-smi enumerate — they ignore CUDA_VISIBLE_DEVICES. Under the
+    built-in launcher CUDA_VISIBLE_DEVICES is the selected `gpus`, so cuda:0 may be physical
+    GPU 4. Returns None for UUID/MIG entries (can't map to an integer NVML index cheaply)."""
+    # The integer mapping assumes CUDA_DEVICE_ORDER=PCI_BUS_ID (the default) so CUDA's order
+    # matches nvidia-smi's; heterogeneous boxes with FASTEST_FIRST could differ, but the caller
+    # is best-effort and degrades to a safe no-op.
+    cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if not cvd:
+        return int(index)
+    entries = [e.strip() for e in cvd.split(",") if e.strip()]
+    if index >= len(entries):
+        return None
+    ent = entries[index]
+    return int(ent) if ent.isdigit() else None
+
+
+def gpu_numa_cpus(gpu_index: int):
+    """CPU cores on the NUMA node local to `gpu_index`'s GPU (a CUDA-visible index), or None if
+    it can't be resolved. Maps visible→physical (CUDA_VISIBLE_DEVICES), then reads the GPU's PCI
+    bus id (pynvml, else `nvidia-smi`) → sysfs numa_node → node cpulist."""
+    if sys.platform != "linux":
+        return None
+    phys = _visible_to_physical_gpu(int(gpu_index))
+    if phys is None:
+        return None
+    bus = None
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        h = pynvml.nvmlDeviceGetHandleByIndex(phys)
+        b = pynvml.nvmlDeviceGetPciInfo(h).busId
+        bus = b.decode() if isinstance(b, bytes) else b
+    except Exception:
+        try:
+            import subprocess
+            bus = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=pci.bus_id", "--format=csv,noheader",
+                 "--id=%d" % phys], timeout=10,
+            ).decode().strip()
+        except Exception:
+            return None
+    if not bus:
+        return None
+    bus = bus.strip().lower()
+    parts = bus.split(":")
+    if len(parts) == 3:                      # nvml "00000000:c1:00.0" -> sysfs "0000:c1:00.0"
+        parts[0] = parts[0][-4:].rjust(4, "0")
+        bus = ":".join(parts)
+    try:
+        node = int(open(f"/sys/bus/pci/devices/{bus}/numa_node").read().strip())
+        if node < 0:
+            return None
+        cpus = _parse_cpulist(open(f"/sys/devices/system/node/node{node}/cpulist").read())
+        return cpus or None
+    except Exception:
+        return None
+
+
+def set_numa_affinity(gpu_index: int) -> bool:
+    """Best-effort: pin THIS process to the CPU cores of `gpu_index`'s GPU-local NUMA node.
+    DataLoader workers spawned later inherit it. On multi-socket boxes without NVLink, keeping a
+    rank's CPU work (dataloader + NCCL host staging) on its GPU's NUMA node cuts cross-socket
+    traffic. Linux only; a silent no-op when the mapping can't be determined. Returns True if
+    affinity was actually set (so the caller can log what happened)."""
+    try:
+        cpus = gpu_numa_cpus(gpu_index)
+        if not cpus:
+            return False
+        os.sched_setaffinity(0, set(cpus))
+        return True
+    except Exception:
+        return False
+
+
 def set_pdeathsig():
     """Linux: the current process gets SIGKILL as soon as its parent dies.
 

@@ -2,6 +2,7 @@ from typing import Dict
 from collections.abc import Mapping
 
 from tqdm import tqdm
+import contextlib
 import torch
 import re
 import numpy as np
@@ -180,13 +181,18 @@ class Trainer:
         # DDP raises a clear error telling you to enable it — set trainer.config
         # .ddp_find_unused_parameters: true then.
         self._ddp_find_unused_parameters = bool(kwargs.get("ddp_find_unused_parameters", False))
+        # gradient_as_bucket_view=True lets DDP reduce gradients in place in the bucket (less
+        # memory, a small speed win); torch recommends it. Default on, overridable.
+        self._ddp_gradient_as_bucket_view = bool(kwargs.get("ddp_gradient_as_bucket_view", True))
         if ddp.is_ddp():
             # DDP: one process = one GPU (the net is already on the device).
             self._net = torch.nn.parallel.DistributedDataParallel(
                 net,
                 device_ids=[device.index] if device.type == "cuda" else None,
                 find_unused_parameters=self._ddp_find_unused_parameters,
+                gradient_as_bucket_view=self._ddp_gradient_as_bucket_view,
             )
+            self._register_ddp_comm_hook(kwargs.get("ddp_comm", "none"))
         else:
             # Single GPU / CPU — no wrapper. DataParallel was removed; multiple GPUs
             # are launched by the built-in DDP launcher (see cli.maybe_launch_ddp),
@@ -205,6 +211,25 @@ class Trainer:
         }
         self._metrics = metrics
         self._optimizer = optimizer
+        # Gradient accumulation: run the optimizer every N micro-batches (effective batch =
+        # N × batch_size). Under DDP the gradient all-reduce is skipped (no_sync) on the
+        # N-1 non-boundary micro-steps and done ONCE per window — the biggest lever on a
+        # bandwidth-limited interconnect (PCIe without NVLink), where the per-step all-reduce
+        # is otherwise exposed for small nets. `_micro_step` counts micro-batches continuously.
+        # Note: the /N loss scaling equals a true N× batch only when the micro-batches are
+        # equal-sized (the usual drop_last / even-shard case); a smaller trailing micro-batch
+        # is slightly under-weighted — the standard accumulation caveat.
+        self._grad_accum_steps = max(1, int(kwargs.get("grad_accum_steps", 1)))
+        if self._grad_accum_steps > 1 and self._optimizer_uses_closure():
+            if ddp.is_main():
+                print(f"--> WARNING: grad_accum_steps>1 with {type(self._optimizer).__name__} "
+                      "(closure optimizer) is unsupported; using grad_accum_steps=1.")
+            self._grad_accum_steps = 1
+        if self._grad_accum_steps > 1 and self._ddp_find_unused_parameters and ddp.is_main():
+            print("--> WARNING: grad_accum_steps>1 with ddp_find_unused_parameters=true — DDP's "
+                  "unused-param detection across a no_sync window can misreduce gradients; "
+                  "verify your results or avoid the combination.")
+        self._micro_step = 0
         self._scheduler = scheduler
         self._epochs = epochs
         self._keep_best_on = keep_best_on
@@ -483,19 +508,55 @@ class Trainer:
                 return int(np.ceil(1.0 * len(loader.dataset) / bs))
             return loader.total_batches()
 
+    def _register_ddp_comm_hook(self, comm):
+        """Optional DDP gradient-compression comm hook. `bf16`/`fp16` halve the all-reduce
+        payload — a direct win on a bandwidth-limited interconnect (PCIe without NVLink).
+        `none`/`fp32` (default) keeps the full-precision all-reduce."""
+        comm = str(comm or "none").lower()
+        if comm in ("none", "", "fp32"):
+            return
+        try:
+            from torch.distributed.algorithms.ddp_comm_hooks import default_hooks as _h
+            hook = {"bf16": getattr(_h, "bf16_compress_hook", None),
+                    "fp16": getattr(_h, "fp16_compress_hook", None)}.get(comm)
+            if hook is None:
+                if ddp.is_main():
+                    print(f"--> WARNING: ddp_comm='{comm}' unsupported here; using fp32 all-reduce.")
+                return
+            self._net.register_comm_hook(state=None, hook=hook)
+            if ddp.is_main():
+                print(f"--> DDP comm hook: {comm} gradient compression (halved all-reduce payload)")
+        except Exception as e:
+            if ddp.is_main():
+                print(f"--> WARNING: could not register ddp_comm hook '{comm}': {e}")
+
     def one_step_train(self, source, labels):
+        accum = self._grad_accum_steps
+        at_boundary = ((self._micro_step + 1) % accum == 0)   # optimizer steps here
+        window_start = (self._micro_step % accum == 0)        # zero grads here
+
         def closure(**kwargs):
-            self._optimizer.zero_grad(set_to_none=True)
-            with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
-                predictions, losses_values = self.compute_losses(source, labels)
-                total_loss = torch.sum(
-                    torch.stack([ls[0] * ls[1] for ls in losses_values.values()])
-                )
-            # backward — outside autocast; for fp16 we scale gradients with the scaler.
-            if self._scaler.is_enabled():
-                self._scaler.scale(total_loss).backward()
-            else:
-                total_loss.backward()
+            if window_start:
+                self._optimizer.zero_grad(set_to_none=True)
+            # DDP: skip the all-reduce on the N-1 non-boundary micro-steps (no_sync), so
+            # gradients are reduced ONCE per accumulation window instead of every micro-step.
+            sync_ctx = (self._net.no_sync()
+                        if (accum > 1 and not at_boundary and ddp.is_ddp()
+                            and hasattr(self._net, "no_sync"))
+                        else contextlib.nullcontext())
+            with sync_ctx:
+                with torch.autocast("cuda", dtype=self._autocast_dtype, enabled=self._amp_enabled):
+                    predictions, losses_values = self.compute_losses(source, labels)
+                    total_loss = torch.sum(
+                        torch.stack([ls[0] * ls[1] for ls in losses_values.values()])
+                    )
+                    if accum > 1:
+                        total_loss = total_loss / accum   # mean over the window == a N× batch
+                # backward — outside autocast; for fp16 we scale gradients with the scaler.
+                if self._scaler.is_enabled():
+                    self._scaler.scale(total_loss).backward()
+                else:
+                    total_loss.backward()
             self.losses_without_weights = {m: v[0] for m, v in losses_values.items()}
             self._log_train_step_data(source, labels, predictions)
             self._logger.log_train_losses(self._global_step, self.losses_without_weights)
@@ -503,15 +564,18 @@ class Trainer:
 
         if self._optimizer_uses_closure():
             # SAM/LBFGS: the scaler is always off (fp16 falls back to bf16), so the
-            # double forward/backward inside the closure works as before.
+            # double forward/backward inside the closure works as before. accum is forced
+            # to 1 for closure optimizers (see __init__), so every step is a boundary.
             self._optimizer.step(closure)
         else:
             _ = closure()
-            if self._scaler.is_enabled():
-                self._scaler.step(self._optimizer)
-                self._scaler.update()
-            else:
-                self._optimizer.step()
+            if at_boundary:
+                if self._scaler.is_enabled():
+                    self._scaler.step(self._optimizer)
+                    self._scaler.update()
+                else:
+                    self._optimizer.step()
+        self._micro_step += 1
 
     def initialize_network(self):
         self._net.to(self._device)
