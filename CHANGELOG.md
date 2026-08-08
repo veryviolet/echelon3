@@ -4,6 +4,35 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.10.9 — 2026-08-08
+
+### Fixed
+
+- **A crashing rank under DDP now surfaces the real traceback in the launcher's failure
+  summary.** echelon3 hard-exits a crashed rank (`os._exit(1)`) to avoid an NCCL-teardown
+  hang, which bypassed torch elastic's error recording — so the summary showed
+  `ChildFailedError / <NO_OTHER_FAILURES> / exitcode 1` with the actual exception buried in
+  the interleaved multi-rank output. The rank now records the exception to the elastic error
+  file before exiting, and the entrypoint is wrapped with `@record` for uncaught setup errors,
+  so the launcher reports the real rank/message/traceback.
+
+### Added
+
+- **`Metric` can derive `reset()` / `to()` / `dist_reduce()` from a declared counter list.**
+  Declare `_counters = ("total", "count")` and a "sum a few scalar counters, return a ratio"
+  metric only needs `update()` / `compute()` — the base zeroes, moves, and SUM-all-reduces the
+  counters. Opt-in and backward compatible (empty by default; metrics that manage their own
+  state are unchanged).
+- **Build-time metric validation.** `create_metrics` now checks each training metric exposes
+  `update`/`compute`/`reset`/`to` and that `reset()` runs (and, for declared `_counters`,
+  actually creates them) — so a broken metric fails at construction with a clear `TypeError`,
+  not ~a minute later on the first validation after DDP spin-up + `torch.compile`.
+
+### Changed
+
+- `python -m echelon3.cli` now prints how to invoke the CLI (`echelon3 train …`) instead of
+  Python's opaque "package cannot be directly executed".
+
 ## 0.10.8 — 2026-08-05
 
 ### Added

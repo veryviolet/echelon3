@@ -207,6 +207,37 @@ def create_loss(config: DictConfig):
     return losses
 
 
+def _validate_metric(name, m):
+    """Fail fast at build time on a broken training metric, instead of ~a minute later on the
+    first validation (after DDP spin-up + dataset init + torch.compile)."""
+    for meth in ("update", "compute", "reset", "to"):
+        if not callable(getattr(m, meth, None)):
+            raise TypeError(
+                f"metric '{name}' ({type(m).__module__}.{type(m).__name__}) is not a valid "
+                f"training metric: missing callable '{meth}'. Subclass "
+                f"echelon3.metrics.base.Metric (or use a torchmetrics.Metric). "
+                f"(A bare function is only valid as the metric under `evaluate`.)")
+    # Run reset() NOW so a reset() that throws fails at build, not on the first validation.
+    try:
+        m.reset()
+    except Exception as e:
+        raise TypeError(
+            f"metric '{name}' ({type(m).__name__}).reset() failed at build time: {e!r}."
+        ) from e
+    # If the metric declares scalar counters, reset() must have created them — this catches
+    # the reported failure mode (a subclass overrides reset() and forgets a counter, so it
+    # only blows up later in dist_reduce()/compute()). NOTE: this only covers DECLARED
+    # counters; the fully general "reset() initialises everything a later method reads" can't
+    # be checked without running compute()/dist_reduce() with real accumulated state.
+    declared = tuple(getattr(m, "_counters", ()) or ())
+    missing = [c for c in declared if not hasattr(m, c)]
+    if missing:
+        raise TypeError(
+            f"metric '{name}' ({type(m).__name__}) declares _counters {declared} but reset() "
+            f"did not create {missing}. If you override reset(), initialise every declared "
+            f"counter (or call super().reset()).")
+
+
 def create_metrics(config):
 
     metrics = {}
@@ -215,7 +246,9 @@ def create_metrics(config):
 
     for cfg in config:
         name, one = list(cfg.items())[0]
-        metrics[name] = create_universal(one)
+        m = create_universal(one)
+        _validate_metric(name, m)
+        metrics[name] = m
 
     return metrics
 

@@ -107,6 +107,18 @@ def _train_estimator(cfg: DictConfig):
     print(Style.RESET_ALL)
 
 
+def _record_ddp_errors(fn):
+    """Wrap the DDP rank entrypoint with torch elastic's @record so an UNCAUGHT exception
+    (e.g. during setup, before trainer.train()) is written to the elastic error file and
+    surfaced in the launcher's failure summary. No-op if torch elastic isn't importable."""
+    try:
+        from torch.distributed.elastic.multiprocessing.errors import record
+        return record(fn)
+    except Exception:
+        return fn
+
+
+@_record_ddp_errors
 def _train(cfg: DictConfig):
 
     setup_warnings()  # accumulate warnings, summary — before each validation
@@ -312,6 +324,15 @@ def _train(cfg: DictConfig):
         traceback.print_exc()
         _close_quietly(trainer)  # release worker semaphores on the failure path too
         if ddp.is_ddp():
+            # Record the real exception into the elastic error file so the launcher's summary
+            # surfaces THIS traceback (rank + message) instead of "<NO_OTHER_FAILURES> /
+            # exitcode 1" buried under interleaved rank output. Best-effort; no-op if not under
+            # the elastic launcher (TORCHELASTIC_ERROR_FILE unset).
+            try:
+                from torch.distributed.elastic.multiprocessing.errors.handlers import get_error_handler
+                get_error_handler().record_exception(e)
+            except Exception:
+                pass
             # A clean destroy_process_group() can hang on the NCCL teardown while an
             # unfinished collective is pending in the group (the crashed rank does not
             # exit → a silent hang). A hard exit → the launcher reaps the peers.

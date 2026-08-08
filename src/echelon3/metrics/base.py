@@ -36,6 +36,36 @@ def all_gather_cat(tensor: torch.Tensor) -> torch.Tensor:
 
 
 class Metric:
+    """Base for custom metrics. Implement ``update``/``compute``; for the common
+    "sum a few scalar counters, return a ratio" metric, declare the counter names and get
+    ``reset``/``to``/``dist_reduce`` for free::
+
+        class MeanCosine(Metric):
+            _counters = ("total_cosine", "count")   # reset/to/dist_reduce derived from this
+            def __init__(self): self.reset()
+            def update(self, pred, target):
+                dev = pred.device
+                self.total_cosine = self.total_cosine.to(dev) + cosine(pred, target).sum()
+                self.count = self.count.to(dev) + pred.size(0)
+            def compute(self): return (self.total_cosine / self.count.clamp(min=1)).item()
+
+    Leave ``_counters`` empty to manage state by hand (lists, arbitrary-shape tensors, …) —
+    then you override ``reset`` yourself (and ``dist_reduce`` if the state needs DDP syncing).
+
+    Counter contract: ``reset()`` creates each counter as a float64 scalar **on CPU**;
+    ``update()`` must move it onto the batch device (``self.total = self.total.to(dev) + …``,
+    as above) so ``dist_reduce()``'s NCCL all-reduce runs on device tensors — a counter left
+    on CPU would fail the NCCL collective under DDP."""
+
+    #: opt-in: names of scalar accumulator buffers. If set, the base derives reset()/to()/
+    #: dist_reduce() over them; if empty, the subclass manages its own state.
+    _counters: tuple = ()
+
+    def reset(self):
+        """Zero the declared ``_counters`` (float64 scalars). Metrics without ``_counters``
+        override this to reset their own state (the base is then a no-op)."""
+        for name in self._counters:
+            setattr(self, name, torch.zeros((), dtype=torch.float64))
 
     def to(self, *args, **kwargs):
         # Custom metrics accumulate on CPU (numpy/scipy) or move tensors to the
@@ -48,17 +78,24 @@ class Metric:
         # nn.Module.to when self is a module.
         if isinstance(self, torch.nn.Module):
             return torch.nn.Module.to(self, *args, **kwargs)
+        for name in self._counters:               # move declared counter tensors, if any
+            v = getattr(self, name, None)
+            if isinstance(v, torch.Tensor):
+                setattr(self, name, v.to(*args, **kwargs))
         return self
 
     def dist_reduce(self):
         """DDP: reduce the accumulated state across ranks BEFORE ``compute()`` (validation
-        is sharded across ranks via DistributedSampler). Base is a no-op: single GPU,
-        torchmetrics (which reduce themselves inside compute), and metrics without
-        distributed state. A custom metric with accumulator counters should ``all_reduce
-        (SUM)`` its buffers here (see :func:`all_reduce_sum_`) — then ``compute()`` returns
-        the exact global value. Called by the trainer on ALL ranks symmetrically (this is a
-        collective operation)."""
-        pass
+        is sharded across ranks via DistributedSampler). If ``_counters`` are declared, the
+        base SUM-all-reduces them (exact global value). Otherwise it is a no-op — fine for a
+        single GPU, torchmetrics (which reduce inside compute), and metrics without
+        distributed state; a custom metric with non-counter state overrides this (e.g.
+        :func:`all_reduce_sum_` for counters, :func:`all_gather_cat` for gathered buffers).
+        Called by the trainer on ALL ranks symmetrically (this is a collective operation)."""
+        counters = [getattr(self, n) for n in self._counters
+                    if isinstance(getattr(self, n, None), torch.Tensor)]
+        if counters:
+            all_reduce_sum_(*counters)
 
     @abstractmethod
     def update(self, predicted: torch.Tensor, target: torch.Tensor):
@@ -66,10 +103,6 @@ class Metric:
 
     @abstractmethod
     def compute(self):
-        pass
-
-    @abstractmethod
-    def reset(self):
         pass
 
 

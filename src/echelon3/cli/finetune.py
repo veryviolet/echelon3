@@ -82,6 +82,17 @@ def finetune_app(cfg: DictConfig):
     _finetune(cfg)
 
 
+def _record_ddp_errors(fn):
+    """@record wrapper (see cli/train.py): surface an UNCAUGHT rank exception in the elastic
+    failure summary. No-op if torch elastic isn't importable."""
+    try:
+        from torch.distributed.elastic.multiprocessing.errors import record
+        return record(fn)
+    except Exception:
+        return fn
+
+
+@_record_ddp_errors
 def _finetune(cfg: DictConfig):
     setup_warnings()  # collect warnings, summary — before each validation
     _install_sigint_flag()  # flag Ctrl-C (to distinguish a worker death from OOM)
@@ -225,6 +236,12 @@ def _finetune(cfg: DictConfig):
         traceback.print_exc()
         _close_quietly(trainer)  # free worker semaphores on the failure path too
         if ddp.is_ddp():
+            # Surface the real traceback in the elastic failure summary (see cli/train.py).
+            try:
+                from torch.distributed.elastic.multiprocessing.errors.handlers import get_error_handler
+                get_error_handler().record_exception(e)
+            except Exception:
+                pass
             sys.stderr.flush()
             os._exit(1)
         raise
