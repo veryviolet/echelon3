@@ -268,6 +268,16 @@ def _train(cfg: DictConfig):
     print(f'        {type(ckpt_manager).__name__}({cfg.target})')
     print(Fore.CYAN, end='')
 
+    # net.weights inits the net, but auto-resume (checkpoints already in target.path) loads the
+    # checkpoint's model state on top and DISCARDS that init — silently, so make it loud.
+    if 'weights' in cfg.net.keys() and getattr(ckpt_manager, 'idxs', None):
+        print(Fore.YELLOW, end='')
+        print(f'--> WARNING: net.weights ({cfg.net.weights}) is OVERRIDDEN by auto-resume — '
+              f'target.path already holds checkpoints {sorted(ckpt_manager.idxs)}, so training '
+              f'resumes from the latest and the net.weights init is discarded. Clear/move '
+              f'target.path to start from net.weights instead.')
+        print(Fore.CYAN, end='')
+
     print(f'--> Initializing mlops logger... ')
     if 'mlops' in cfg.keys():
         logger_config = cfg.mlops

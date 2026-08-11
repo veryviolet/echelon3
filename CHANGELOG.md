@@ -4,6 +4,41 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.11.0 — 2026-08-11
+
+### Changed (BREAKING)
+
+- **keep_best direction is now per-name; the global `high_is_better` and the overloaded
+  `value` key are removed.** A `keep_best_on` entry that names a **loss** defaults to `low`
+  (minimise); a **metric** defaults to `high` (maximise). This fixes the reported case where
+  `keep_best_on: <loss_name>` saved only the initial checkpoint — the loss fell but the old
+  default (`high_is_better=True`) treated a bare name as "maximise", so a falling loss never
+  counted as an improvement.
+  - New schema:
+    - bare: `keep_best_on: <name>` or `keep_best_on: [<name>, …]` (per-type default direction);
+    - shorthand: `keep_best_on: {<name>: high|low}`;
+    - directional: `keep_best_on: {<name>: {mode: directional, direction: high|low}}`;
+    - tolerance: `keep_best_on: {<name>: {mode: tolerance, direction: high|low, tolerance_value: 0.1%}}`.
+  - **Migration (hard errors, not silent):** passing `trainer.config.high_is_better` now raises;
+    a `{<name>: {value: …}}` entry now raises — replace `value` with `direction` (directional)
+    or `tolerance_value` (tolerance). Update legacy configs accordingly.
+
+### Fixed
+
+- **A `keep_best_on` key that is neither a metric nor a loss is now a hard error at build time.**
+  When a base recipe's `keep_best_on` merges with a child config and leaks a key this run never
+  computes, the old code silently kept only the initial checkpoint (the missing key never
+  "improved") — this could waste whole training runs. The stray key now fails immediately with
+  the list of available metrics/losses.
+- **A declared keep_best metric/loss that is not actually computed at validation now warns
+  loudly instead of silently never saving.** If `metrics_on` routes a tracked key to a loader
+  that does not run it, the trainer prints a one-time warning naming the missing key(s) rather
+  than quietly skipping every checkpoint.
+- **`net.weights` + auto-resume now warns that the init weights are discarded.** When
+  `target.path` already holds checkpoints, training resumes from the latest and the
+  `net.weights` initialisation is silently overridden — the trainer now says so and tells you to
+  clear/move `target.path` to start from `net.weights` instead.
+
 ## 0.10.9 — 2026-08-08
 
 ### Fixed

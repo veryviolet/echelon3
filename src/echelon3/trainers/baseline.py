@@ -97,8 +97,6 @@ class Trainer:
 
     _reset = None
 
-    _high_is_better = None
-
     _qconfig = None
 
     _metrics_on: Dict[str, str] | None = None  # metric_name -> dataset_name
@@ -121,7 +119,6 @@ class Trainer:
         times_to_validate_per_epoch=1,
         float_labels: bool = False,
         reset: bool = False,
-        high_is_better: bool = True,
         device: torch.device = torch.device("cuda"),
         device_ids: list = None,
         **kwargs,
@@ -233,7 +230,11 @@ class Trainer:
         self._scheduler = scheduler
         self._epochs = epochs
         self._keep_best_on = keep_best_on
-        self._high_is_better = high_is_better
+        if "high_is_better" in kwargs:
+            raise ValueError(
+                "trainer.config.high_is_better was removed in 0.11.0. keep_best direction is "
+                "now per-metric: a loss defaults to 'low' (minimise) and a metric to 'high' "
+                "(maximise); override with keep_best_on: {<name>: {direction: high|low}}.")
         self._times_to_validate_per_epoch = times_to_validate_per_epoch
         self._ckpt_manager = ckpt_manager
         # Only rank 0 logs (in DDP non-main ranks get a stub).
@@ -306,6 +307,8 @@ class Trainer:
         # current and best values of ALL tracked metrics
         self._current_metrics_all: Dict[str, float] | None = None
         self._best_metrics_all: Dict[str, float] | None = None
+        # keep_best keys we already warned about being absent from the computed metrics
+        self._warned_missing_keep_best: set = set()
 
     def train(self):
 
@@ -698,32 +701,73 @@ class Trainer:
     # =========================
 
     def _build_keep_best_config(self, keep_best_on):
+        """Normalise keep_best_on into ``{name: {mode, direction[, tolerance_value]}}``.
+
+        Direction (0.11.0): a LOSS defaults to ``low`` (minimise), a metric to ``high``
+        (maximise); override with an explicit ``direction: high|low``. Every name must be a
+        known metric or loss — otherwise it is never computed and checkpoints would never save,
+        so it is a hard error. The removed ``value`` / ``high_is_better`` keys raise a clear
+        migration error.
+
+        Forms: ``keep_best_on: name`` / ``[name, …]`` (bare, per-type default direction);
+        ``{name: high|low}`` (shorthand — the value IS the direction); ``{name: {mode,
+        direction, tolerance_value}}`` (full)."""
         if keep_best_on is None:
             return None
 
-        # dict / Mapping (including DictConfig)
+        known = set(self._losses) | set(self._metrics)   # names that actually get computed
+
+        def _default_direction(name):
+            return "low" if name in self._losses else "high"
+
+        def _check_known(name):
+            if name not in known:
+                raise ValueError(
+                    f"keep_best_on['{name}'] is neither a metric nor a loss — it is never "
+                    f"computed, so a checkpoint would never be saved. Available metrics: "
+                    f"{sorted(self._metrics)}; losses: {sorted(self._losses)}. Remove the stray "
+                    f"key (e.g. a base recipe's keep_best_on merged into this run).")
+
+        def _as_direction(v, name):
+            d = str(v).lower()
+            if d not in ("high", "low"):
+                raise ValueError(
+                    f"keep_best_on['{name}']: direction must be 'high' or 'low', got {v!r}.")
+            return d
+
         if isinstance(keep_best_on, Mapping):
             cfg = {}
-            for name, v in keep_best_on.items():
+            for raw_name, v in keep_best_on.items():
+                name = str(raw_name)
+                _check_known(name)
                 if isinstance(v, Mapping):
+                    if "value" in v:
+                        raise ValueError(
+                            f"keep_best_on['{name}']: the 'value' key was removed in 0.11.0 — use "
+                            f"'direction: high|low' (directional) or 'tolerance_value: <n>' "
+                            f"(tolerance).")
                     mode = str(v.get("mode", "directional")).lower()
-                    value = v.get("value", None)
-                    direction = v.get("direction", None)
-                    direction = str(direction).lower() if isinstance(direction, str) else None
+                    direction = (_as_direction(v["direction"], name)
+                                 if v.get("direction") is not None else _default_direction(name))
+                    entry = {"mode": mode, "direction": direction}
+                    if mode == "tolerance":
+                        if "tolerance_value" not in v:
+                            raise ValueError(
+                                f"keep_best_on['{name}']: mode='tolerance' needs 'tolerance_value' "
+                                f"(e.g. 0.1% or 0.001).")
+                        entry["tolerance_value"] = v["tolerance_value"]
+                    cfg[name] = entry
                 else:
-                    mode = "directional"
-                    value = v
-                    direction = None
-                cfg[str(name)] = {"mode": mode, "value": value, "direction": direction}
+                    # shorthand {name: high|low}: the mapping value IS the direction
+                    cfg[name] = {"mode": "directional", "direction": _as_direction(v, name)}
             return cfg
 
-        # string / list of names: directional high/low based on high_is_better
-        names = self._normalize_keep_best_names(keep_best_on)
-        direction = "high" if self._high_is_better else "low"
-        return {
-            n: {"mode": "directional", "value": direction, "direction": direction}
-            for n in names
-        }
+        # bare string / list → directional with the per-type default direction
+        cfg = {}
+        for n in self._normalize_keep_best_names(keep_best_on):
+            _check_known(n)
+            cfg[n] = {"mode": "directional", "direction": _default_direction(n)}
+        return cfg
 
     def _normalize_keep_best_names(self, value):
         if value is None:
@@ -746,68 +790,56 @@ class Trainer:
         cfg = self._keep_best_config.get(name)
         if cfg is None:
             return False
-
-        mode = str(cfg.get("mode", "directional")).lower()
-        val = cfg.get("value", None)
-        direction = cfg.get("direction", None)
-
         if best is None:
             return True
 
-        # ---------- tolerance ----------
-        if mode == "tolerance":
-            if val is None:
-                raise ValueError(
-                    f"keep_best_on[{name}]: mode='tolerance' but no value given"
-                )
-            tol = self._parse_tolerance(val)
+        direction = cfg["direction"]        # always resolved by _build_keep_best_config
+
+        # ---------- tolerance: improve, or stay within tolerance of the best ----------
+        if cfg["mode"] == "tolerance":
+            tol = self._parse_tolerance(cfg["tolerance_value"])
             denom = max(abs(best), 1e-12)
-
-            if direction is None:
-                direction = "high" if self._high_is_better else "low"
-            direction = str(direction).lower()
-
             if direction == "low":
-                if current <= best:
-                    return True
-                rel_inc = (current - best) / denom
-                return rel_inc <= tol
-            else:  # direction == "high"
-                if current >= best:
-                    return True
-                rel_dec = (best - current) / denom
-                return rel_dec <= tol
+                return True if current <= best else (current - best) / denom <= tol
+            return True if current >= best else (best - current) / denom <= tol
 
         # ---------- directional ----------
-        if isinstance(val, str):
-            direction = val.lower()
-        if direction not in ("high", "low"):
-            direction = "high" if self._high_is_better else "low"
-
-        if direction == "high":
-            return current > best
-        else:
-            return current < best
+        return current > best if direction == "high" else current < best
 
     def _all_metrics_improved(self) -> bool:
         if self._keep_best_config is None or not self._keep_best_config:
             return True
 
-        if self._current_metrics_all is None:
+        # Every keep_best key is a known loss/metric (checked at build), but it may still be
+        # absent here if it is not computed on its resolved dataset (e.g. metrics_on routes it to
+        # a loader that does not run it). That would silently never save — make it loud instead.
+        computed = self._current_metrics_all or {}
+        missing = [n for n in self._keep_best_config if n not in computed]
+        if missing:
+            self._warn_missing_keep_best(missing)
             return False
 
         if self._best_metrics_all is None:
             return True
 
         for name in self._keep_best_config.keys():
-            if name not in self._current_metrics_all:
-                return False
-            cur = self._current_metrics_all[name]
+            cur = computed[name]
             best = self._best_metrics_all.get(name)
             if not self._metric_condition(name, cur, best):
                 return False
 
         return True
+
+    def _warn_missing_keep_best(self, missing):
+        fresh = [n for n in missing if n not in self._warned_missing_keep_best]
+        if not fresh or not ddp.is_main():
+            return
+        self._warned_missing_keep_best.update(fresh)
+        print(Fore.YELLOW, end="")
+        print(f"--> WARNING: keep_best_on key(s) {fresh} are declared losses/metrics but were "
+              f"NOT computed at validation (check metrics_on / the test dataset that runs them). "
+              f"No checkpoint can be saved while they are missing.")
+        print(Fore.CYAN, end="")
 
     def validate_and_check_for_saving(self, initial=False):
         self.validate()
