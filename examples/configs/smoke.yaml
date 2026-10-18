@@ -109,9 +109,8 @@ trainer:
     keep_best_on:
       accuracy:
         mode: directional
-        value: high
+        direction: high
     times_to_validate_per_epoch: 1
-    high_is_better: true
 
 target:
   path: ${oc.env:SMOKE_TARGET,./targets/smoke}

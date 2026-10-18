@@ -1,7 +1,7 @@
 import os
 import glob
 import re
-import json
+import tempfile
 import torch
 
 CHECKPOINTS_PREFIX = 'checkpoint-'
@@ -18,12 +18,21 @@ class CheckpointManager:
         for key, val in kwargs.items():
             setattr(self, '_' + key, val)
 
+        if self._checkpoints_to_keep is not None and (
+            isinstance(self._checkpoints_to_keep, bool)
+            or not isinstance(self._checkpoints_to_keep, int)
+            or self._checkpoints_to_keep < 1
+        ):
+            raise ValueError('checkpoints_to_keep must be a positive integer or null (keep all)')
         self.init_storage()
 
     def init_storage(self):
         if os.path.exists(self._path):
             ckpt_files = list(glob.glob(os.path.join(self._path, CHECKPOINTS_PREFIX+'*'+CHECKPOINTS_EXT)))
-            self._idxs = [int(re.sub(r'\D', '', os.path.basename(f))) for f in ckpt_files]
+            self._idxs = sorted(
+                int(match.group(1)) for f in ckpt_files
+                if (match := re.fullmatch(r'checkpoint-(\d+)\.tar', os.path.basename(f)))
+            )
         else:
             self._idxs = []
             os.makedirs(self._path, exist_ok=True)
@@ -61,9 +70,22 @@ class CheckpointManager:
 
     def save_checkpoint(self, ckpt: dict):
         new_number = max(self._idxs) + 1 if len(self._idxs) > 0 else 1
-        with open(os.path.join(self._path, f'{CHECKPOINTS_PREFIX}{new_number}{CHECKPOINTS_EXT}'), 'wb') as f:
-            torch.save(ckpt, f)
+        destination = os.path.join(self._path, f'{CHECKPOINTS_PREFIX}{new_number}{CHECKPOINTS_EXT}')
+        # Publish a complete checkpoint before pruning any previous good copies.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=self._path, suffix='.tmp', delete=False) as f:
+                temporary = f.name
+                torch.save(ckpt, f)
+            os.replace(temporary, destination)
+        finally:
+            if temporary is not None and os.path.exists(temporary):
+                os.remove(temporary)
         self._idxs.append(new_number)
+        if self._checkpoints_to_keep is not None:
+            for idx in sorted(self._idxs)[:-self._checkpoints_to_keep]:
+                os.remove(os.path.join(self._path, f'{CHECKPOINTS_PREFIX}{idx}{CHECKPOINTS_EXT}'))
+                self._idxs.remove(idx)
 
     @property
     def path(self):

@@ -56,7 +56,7 @@ gpus: [0, 1]
 ## `net`
 
 `create_net` resolves the triple and calls `type(**config)`. `config` is
-required. Container nets (`ClassifierNet`, `Segmenter`, `HeatmapDetector`)
+optional when the constructor needs no arguments. Container nets (`ClassifierNet`, `Segmenter`, `HeatmapDetector`)
 receive further triples as their config values and resolve them recursively.
 
 ```yaml
@@ -109,7 +109,8 @@ and a `test` entry, which may be **either** a single dataset **or** a mapping of
 named datasets. Each dataset triple is instantiated with
 `type(**config, augment=..., preprocess=...)`, where the augment/preprocess come
 from the `transform` section (train transforms for `train`, test transforms for
-every `test` dataset).
+every `test` dataset by default). Individual test datasets and multipart train
+parts may override either pipeline using a sibling `transform:` block (see below).
 
 Single test dataset:
 
@@ -195,6 +196,73 @@ For detection, bbox-aware Compose is enabled by putting `bbox_params` under the
 purpose's `config`: `transform.train.config.bbox_params: { format: yolo,
 label_fields: [] }`.
 
+### Per-dataset transforms (since 0.12.0)
+
+Put `transform` **beside** `module`, `type`, and `config` in each test dataset spec,
+or in a `MultiPartDataset` part. The existing top-level `transform.train` and
+`transform.test` remain the common defaults. No `transform.test.datasets` mapping
+is used. A single non-multipart training dataset still uses `transform.train`.
+
+- Missing `augment` inherits the common augmentation; missing `preprocess` inherits
+  the common preprocessing. The two keys override independently.
+- A present chain replaces the entire common chain, in its listed order. Chains
+  are not concatenated and operations are not merged by name.
+- `augment: {}` (or `null`) removes common image operations but retains the automatic
+  `ToTensorV2`. `preprocess: {}` is an identity chain; `null` disables preprocessing.
+- Omitting `transform`, or using `transform: {}`, inherits both common pipelines.
+- Local augmentation inherits the common bbox format/label fields. To replace or
+  disable them, supply local `transform.config.bbox_params` (or `null`) together
+  with the local `augment` chain.
+- The same resolver is used in initial/intermediate training validation, finetuning,
+  and standalone `evaluate`. The dataset applies preprocessing once; `PairEvaluator`
+  does not apply it again.
+
+```yaml
+transform:
+  train:
+    augment:
+      flip: { module: albumentations, type: HorizontalFlip, config: { p: 0.5 } }
+    preprocess:
+      scale: { module: echelon3.transforms.preprocess.basic, type: To01, name: scale }
+  test:
+    augment:
+      resize: { module: albumentations, type: Resize, config: { height: 256, width: 256 } }
+    preprocess:
+      scale: { module: echelon3.transforms.preprocess.basic, type: To01, name: scale }
+data:
+  train:
+    module: echelon3.data.basic
+    type: MultiPartDataset
+    config:
+      parts:
+        - name: source_a             # optional; unique within this multipart dataset
+          share: 0.5
+          module: my_project.data
+          type: Images
+          config: { split: train_a }
+          transform: { augment: {} } # no random image operations; common preprocess
+        - share: 0.5                # old unnamed parts remain supported
+          module: my_project.data
+          type: Images
+          config: { split: train_b } # inherits both common train pipelines
+  test:
+    standard:
+      module: my_project.data
+      type: Images
+      config: { split: test_a }      # inherits common resize and preprocessing
+    native_size:
+      module: my_project.data
+      type: Images
+      config: { split: test_b }
+      transform: { augment: {} }     # original size, common preprocessing
+```
+
+Multipart parts keep their list order and `share` sampling semantics. Names are
+optional non-empty, unique strings and are available as `dataset.part_names`
+(`None` for unnamed parts). A part can override transforms with or without a name.
+Use `MultiPartDataLoader` for the multipart train dataset and matching named test
+loaders as usual. Datasets still receive and must apply `augment`/`preprocess`.
+
 ## `loss`
 
 A **list** — each item is a single-key mapping `name -> triple`. Beyond the
@@ -278,7 +346,7 @@ optimizer:
 ## `scheduler`
 
 `create_scheduler` calls `type(optimizer=optimizer, **config)`. `config` is
-required (even if empty for a schedule with defaults). `scheduler.step()` is
+optional for a schedule with defaults. `scheduler.step()` is
 called once per epoch by the trainer.
 
 ```yaml
@@ -299,13 +367,15 @@ built-in `echelon3.trainers.baseline.Trainer` the useful `config` keys are:
 | `epochs` | Number of epochs (required). |
 | `keep_best_on` | Which metric(s) gate checkpoint saving (see below). |
 | `times_to_validate_per_epoch` | Validation passes per epoch (default 1). |
-| `high_is_better` | Default direction when `keep_best_on` is a bare name (default `true`). |
 | `float_labels` | Cast labels to float before the loss (default `false`). |
 | `reset` | On resume, restart epoch/step counters instead of continuing. |
 | `metrics_on` | Map `metric_name -> test_dataset_name` for named test sets. |
 
-`keep_best_on` accepts a bare metric name, a list, or a directional/tolerance
-mapping:
+`keep_best_on` accepts a bare metric/loss name, a list, or a directional/tolerance
+mapping. A loss defaults to `low`, a metric to `high`; an explicit `direction` wins.
+The legacy `high_is_better` and `value` keys were removed in 0.11.0: delete
+`high_is_better`, replace directional `value` with `direction`, and tolerance
+`value` with `tolerance_value`.
 
 ```yaml
 trainer:
@@ -314,14 +384,13 @@ trainer:
   config:
     epochs: 50
     times_to_validate_per_epoch: 1
-    high_is_better: true
     keep_best_on:
       accuracy:
         mode: directional    # save when this metric moves the right way
-        value: high          # high | low
+        direction: high          # high | low
       accuracy_control:
         mode: tolerance      # allow small regressions within a band
-        value: 0.1%          # absolute (0.001) or percent ("0.1%")
+        tolerance_value: 0.1%          # relative fraction (0.001) or percent ("0.1%")
         direction: high
     metrics_on:
       accuracy: incidents
@@ -346,7 +415,10 @@ target:
 
 `path` is the directory for `checkpoint-N.tar` files and TensorBoard events; it
 is also where the default logger writes. Training resumes automatically from the
-highest-numbered checkpoint found there.
+highest-numbered checkpoint found there. `checkpoints_to_keep` must be a positive
+integer; omit it or use `null` to keep all checkpoints. After each successful save,
+the manager deletes older checkpoints beyond the limit. A failed save preserves
+previous checkpoints; merely opening a directory does not prune it.
 
 ## `mlops` (optional)
 
@@ -518,9 +590,8 @@ trainer:
   config:
     epochs: 6
     keep_best_on:
-      accuracy: { mode: directional, value: high }
+      accuracy: { mode: directional, direction: high }
     times_to_validate_per_epoch: 1
-    high_is_better: true
 
 target:
   path: ${oc.env:SMOKE_TARGET,./targets/smoke}

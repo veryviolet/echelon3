@@ -130,10 +130,10 @@ class Trainer:
               keep_best_on:
                 accuracy:
                   mode: directional
-                  value: high      # high / low
+                  direction: high  # high / low
                 accuracy_control:
                   mode: tolerance
-                  value: 0.1%      # or 0.001
+                  tolerance_value: 0.1%  # or 0.001 (relative tolerance)
                   direction: high  # low / high
 
         metrics_on:

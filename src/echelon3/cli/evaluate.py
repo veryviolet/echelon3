@@ -12,14 +12,15 @@ from echelon3 import runtime
 from echelon3.cli import add_cwd_to_sys_path, build_cli
 
 from echelon3.creator import (
-    create_single_augment,
     create_universal,
     create_evaluator,
     create_net,
     create_checkpoint_manager,
-    create_single_preprocess,
     create_single_dataset,
     create_single_dataloader,
+    create_augments,
+    create_preprocesses,
+    resolve_dataset_transforms,
 )
 
 
@@ -59,7 +60,7 @@ def evaluate_app(cfg: DictConfig):
     net = create_net(cfg.net)
     net.to(device)
     print(Fore.LIGHTGREEN_EX, end="")
-    print(f"        {type(net).__name__}({cfg.net.config})")
+    print('        {}({})'.format(type(net).__name__, cfg.net.get('config', {})))
     print(Fore.CYAN, end="")
 
     print(f"--> Initializing checkpoint manager... ")
@@ -73,25 +74,26 @@ def evaluate_app(cfg: DictConfig):
     ckpt, num = ckpt_manager.load_latest_checkpoint()
     ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
     if hasattr(net, "reread_hypers"):
-        net.reread_hypers(**cfg.net.config)
+        net.reread_hypers(**cfg.net.get('config', {}))
 
     net.eval()
     print(f"--> Loaded {num} checkpoint. ")
     print(Fore.CYAN, end="")
 
     print(f"--> Initializing test augmentations... ")
-    test_augment = create_single_augment(
-        cfg.transform.test.augment if "augment" in cfg.transform.test else None
-    )
+    transform = cfg.get('transform')
+    # Construct only test pipelines; evaluate does not need train-only components.
+    test_transform = {'test': transform.get('test', {})} if transform is not None else None
+    _, test_augment = create_augments(test_transform)
     print(Fore.LIGHTGREEN_EX, end="")
     for tr in test_augment:
         print(f"        {tr}")
     print(Fore.CYAN, end="")
 
     print(f"--> Initializing test preprocess... ")
-    test_preprocess = create_single_preprocess(cfg.transform.test.preprocess)
+    _, test_preprocess = create_preprocesses(test_transform)
     print(Fore.LIGHTGREEN_EX, end="")
-    for tr in test_preprocess:
+    for tr in (test_preprocess or []):
         print(f"        {tr}")
     print(Fore.CYAN, end="")
 
@@ -116,10 +118,11 @@ def evaluate_app(cfg: DictConfig):
 
     for set_name, data_cfg, loader_cfg in test_sets:
         tag = "" if single else f" [{set_name}]"
+        augment, preprocess = resolve_dataset_transforms(data_cfg, test_augment, test_preprocess)
 
         print(f"--> Initializing test dataset{tag} (data.test)... ")
         test_dataset = create_single_dataset(
-            data_cfg, augment=test_augment, preprocess=test_preprocess
+            data_cfg, augment=augment, preprocess=preprocess
         )
         print(Fore.LIGHTGREEN_EX, end="")
         print(f"        {test_dataset}")
@@ -140,7 +143,7 @@ def evaluate_app(cfg: DictConfig):
             train_dataloader=None,
             test_dataloader=test_dataloader,
             metric=metric,
-            preprocess=test_preprocess,
+            preprocess=preprocess,
             postprocess=[],
         )
 

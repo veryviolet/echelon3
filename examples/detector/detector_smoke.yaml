@@ -142,8 +142,7 @@ trainer:
     keep_best_on:
       mAP:
         mode: directional
-        value: high
-    high_is_better: true
+        direction: high
     times_to_validate_per_epoch: 1
 
 target:

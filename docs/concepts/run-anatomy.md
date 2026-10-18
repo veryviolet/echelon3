@@ -51,11 +51,10 @@ per set as `{set_name}/{metric}`.
 
 Checkpoints are saved based on `keep_best_on`. It can be:
 
-- a single metric name (kept when it improves in the direction implied by
-  `high_is_better`),
+- a single metric or loss name (metrics default to maximise, losses to minimise),
 - a list of metric names,
-- or a mapping with per-metric modes — `directional` (`value: high|low`) or
-  `tolerance` (only counts as improvement if it moves past a threshold).
+- or a mapping with per-metric modes — `directional` (`direction: high|low`) or
+  `tolerance` (`tolerance_value`: permits a relative regression within the specified band).
 
 When several metrics are tracked they are combined with **AND** — there is no OR,
 weighted, or priority mode: a checkpoint is saved only on a validation where **all**
@@ -71,11 +70,10 @@ trainer:
   config:
     epochs: 50
     times_to_validate_per_epoch: 1
-    high_is_better: true
     keep_best_on:
       accuracy:
         mode: directional
-        value: high
+        direction: high
 ```
 
 ## Multi-GPU and logging

@@ -3,6 +3,7 @@ from typing import Dict, Tuple
 import inspect
 from functools import partial
 from collections import OrderedDict
+from collections.abc import Mapping
 import cv2
 import torch
 from torch.utils.data import DataLoader
@@ -68,10 +69,13 @@ def create_single_augment(config: DictConfig, bbox_params: DictConfig = None):
         for one in config.values():
             transforms.append(create_universal(one))
 
-    return A.Compose(transforms + [ToTensorV2()]) if bbox_params is None \
-        else A.Compose(transforms + [ToTensorV2()], bbox_params={**bbox_params})
+    if bbox_params is not None and not isinstance(bbox_params, A.BboxParams):
+        bbox_params = dict(bbox_params)
+    return A.Compose(transforms + [ToTensorV2()], bbox_params=bbox_params)
 
 def create_single_preprocess(config: DictConfig):
+    if config is None:
+        return None
     transforms = []
     for one in config.values():
         transforms.append((one.name, create_universal(one)))
@@ -109,6 +113,36 @@ def create_preprocesses(config: DictConfig) -> Tuple[callable, callable]:
             transforms[key] = create_single_preprocess(cfg.preprocess)
 
     return transforms['train'], transforms['test']
+
+
+def resolve_dataset_transforms(config, augment, preprocess):
+    """Apply dataset-local transform overrides to the common, already-built pipelines.
+
+    Missing keys inherit independently; present chains replace, never concatenate.
+    An empty augment retains only ToTensorV2; an empty preprocess is an identity.
+    Used by test datasets (train/finetune/evaluate) and MultiPartDataset parts.
+    """
+    local = config.get('transform')
+    if local is None:
+        return augment, preprocess
+    if not isinstance(local, Mapping):
+        raise ValueError('dataset.transform must be a mapping of augment/preprocess/config')
+    unknown = set(local) - {'augment', 'preprocess', 'config'}
+    if unknown:
+        raise ValueError(f'Unknown dataset.transform keys: {sorted(unknown)}')
+    options = local.get('config') or {}
+    if not isinstance(options, Mapping) or set(options) - {'bbox_params'}:
+        raise ValueError('dataset.transform.config only supports bbox_params')
+    if 'bbox_params' in options and 'augment' not in local:
+        raise ValueError('dataset.transform.config.bbox_params requires a local augment chain')
+    if 'augment' in local:
+        # Changing image operations must not silently drop the common bbox contract.
+        processor = getattr(augment, 'processors', {}).get('bboxes')
+        bbox_params = options.get('bbox_params', processor.params if processor else None)
+        augment = create_single_augment(local['augment'], bbox_params=bbox_params)
+    if 'preprocess' in local:
+        preprocess = create_single_preprocess(local['preprocess'])
+    return augment, preprocess
 
 
 def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwargs):
@@ -166,19 +200,21 @@ def create_datasets(config: DictConfig, train_augment, train_preprocess, test_au
         elif purpose == PURPOSE_TEST:
             # A single test dataset (legacy format: module/type/config at the top level)
             if 'module' in cfg and 'type' in cfg:
+                augment, preprocess = resolve_dataset_transforms(cfg, test_augment, test_preprocess)
                 test_dataset = create_single_dataset(
                     cfg,
-                    augment=test_augment,
-                    preprocess=test_preprocess,
+                    augment=augment,
+                    preprocess=preprocess,
                 )
             else:
                 # Several test datasets: key -> sub-config
                 test_dataset = {}
                 for name, sub_cfg in cfg.items():
+                    augment, preprocess = resolve_dataset_transforms(sub_cfg, test_augment, test_preprocess)
                     test_dataset[name] = create_single_dataset(
                         sub_cfg,
-                        augment=test_augment,
-                        preprocess=test_preprocess,
+                        augment=augment,
+                        preprocess=preprocess,
                     )
 
     return train_dataset, test_dataset

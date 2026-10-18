@@ -222,7 +222,7 @@ def _train(cfg: DictConfig):
     net = create_net(cfg.net)
     net.to(device)
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(net).__name__}({cfg.net.config})')
+    print('        {}({})'.format(type(net).__name__, cfg.net.get('config', {})))
     print(Fore.CYAN, end='')
 
     if 'weights' in cfg.net.keys():
@@ -249,14 +249,14 @@ def _train(cfg: DictConfig):
     print(f'--> Initializing optimizer... ')
     optimizer = create_optimizer(cfg.optimizer, net.parameters())
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(optimizer).__name__}({cfg.optimizer.config})')
+    print('        {}({})'.format(type(optimizer).__name__, cfg.optimizer.get('config', {})))
     print(Fore.CYAN, end='')
 
     print(f'--> Initializing learning rate scheduler... ')
     if 'scheduler' in cfg.keys():
         scheduler = create_scheduler(cfg.scheduler, optimizer)
         print(Fore.LIGHTGREEN_EX, end='')
-        print(f'        {type(scheduler).__name__}({cfg.scheduler.config})')
+        print('        {}({})'.format(type(scheduler).__name__, cfg.scheduler.get('config', {})))
         print(Fore.CYAN, end='')
     else:
         scheduler = None
@@ -294,7 +294,7 @@ def _train(cfg: DictConfig):
                              test_dataloader=test_dataloader, scheduler=scheduler, ckpt_manager=ckpt_manager,
                              mlops_logger=mlops_logger, devices=device, device_ids=device_ids)
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(trainer).__name__}({cfg.trainer.config})')
+    print('        {}({})'.format(type(trainer).__name__, cfg.trainer.get('config', {})))
     print(Fore.CYAN, end='')
 
     print(f'--> Training... ')

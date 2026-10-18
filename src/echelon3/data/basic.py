@@ -10,7 +10,7 @@ from omegaconf import OmegaConf, DictConfig, ListConfig
 import cv2
 import numpy as np
 
-from echelon3.creator import create_universal, create_single_dataset
+from echelon3.creator import create_universal, create_single_dataset, resolve_dataset_transforms
 from echelon3.data.filters import BaseFilter
 
 FILTER_KEY = 'filter'
@@ -167,9 +167,16 @@ class MultiPartDataset:
     parts: List[Tuple[float, BasicDataset]] = None
 
     def __init__(self, parts: ListConfig, augment, preprocess, label_type='class', **kwargs):
+        self.part_names = [p.get('name') for p in parts]
+        names = [n for n in self.part_names if n is not None]
+        if any(not isinstance(n, str) or not n.strip() for n in names):
+            raise ValueError('MultiPartDataset part names must be non-empty strings')
+        if len(set(names)) != len(names):
+            raise ValueError('MultiPartDataset part names must be unique')
         self.parts = []
         for p in parts:
-            self.parts.append((p.share, create_single_dataset(p, augment=augment, preprocess=preprocess,
+            part_augment, part_preprocess = resolve_dataset_transforms(p, augment, preprocess)
+            self.parts.append((p.share, create_single_dataset(p, augment=part_augment, preprocess=part_preprocess,
                                                                  label_type=label_type)))
 
     def parts_num(self):
@@ -222,4 +229,3 @@ class ClasswiseDataset:
 
     def __len__(self):
         return sum([self.class_ds_len(label) for label in self.per_class_datasets.keys()])
-    

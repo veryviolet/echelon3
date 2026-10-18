@@ -22,7 +22,7 @@ def exporter_app(cfg: DictConfig):
     net = create_net(cfg.net)
     net.to(device)
     print(Fore.LIGHTGREEN_EX, end='')
-    print(f'        {type(net).__name__}({cfg.net.config})')
+    print('        {}({})'.format(type(net).__name__, cfg.net.get('config', {})))
     print(Fore.CYAN, end='')
 
     if 'target' in cfg.keys():

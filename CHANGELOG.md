@@ -4,6 +4,32 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.12.0 — 2026-10-18
+
+### Added
+
+- Dataset-local `transform: {augment, preprocess}` for test datasets and
+  `MultiPartDataset` parts. Each present chain replaces its common counterpart;
+  omitted keys inherit independently. Empty augmentation retains only `ToTensorV2`.
+  The same resolver serves training/finetuning validation and CLI `evaluate`.
+- Optional unique `name` for multipart parts, exposed through `part_names` without
+  changing sampling, list order, or legacy unnamed-part configs.
+
+### Fixed
+
+- Enforce `target.checkpoints_to_keep` after successful saves. Checkpoints are
+  written to temporary files and atomically published before old copies are pruned;
+  failed saves preserve the previous checkpoints. Omitted/null limits keep all.
+- Migrate shipped examples and current documentation to the 0.11 keep-best schema.
+  CI now runs regression tests, parses current metric summaries, and accepts retained
+  checkpoints instead of requiring the initial checkpoint to survive pruning.
+- Optional component `config` blocks no longer cause logging failures in the CLI.
+  `evaluate` accepts omitted test transforms and preserves bbox augmentation settings.
+- Importing `echelon3.cli.__main__` no longer exits the process, allowing the CI
+  all-module import check to complete. Direct invocation retains its usage message.
+- Synchronize the agent-skill source and generated guide; clarify optional component
+  configuration and the new dataset-transform contract.
+
 ## 0.11.0 — 2026-08-11
 
 ### Changed (BREAKING)
