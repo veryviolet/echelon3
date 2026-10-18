@@ -1364,7 +1364,7 @@ idle between many tiny kernels — and there bf16 buys nothing. The lever is
 <div class="highlight"><pre><span></span><code><span class="nt">trainer</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">compile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">             </span><span class="c1"># off by default</span>
-<span class="w">    </span><span class="nt">compile_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">        </span><span class="c1"># null | &quot;reduce-overhead&quot; | &quot;max-autotune&quot;</span>
+<span class="w">    </span><span class="nt">compile_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">        </span><span class="c1"># null | "reduce-overhead" | "max-autotune"</span>
 </code></pre></div>
 <p>The network is compiled before the DDP wrapper; <code>ddp.unwrap()</code> and checkpoints
 strip the resulting <code>_orig_mod.</code> prefix, so checkpoints stay interchangeable with

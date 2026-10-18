@@ -975,6 +975,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="transform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-dataset-transforms-since-0120" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-dataset transforms (since 0.12.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1326,6 +1343,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="transform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-dataset-transforms-since-0120" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-dataset transforms (since 0.12.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1630,7 +1664,7 @@ See <a href="../../guide/ddp/">Multi-GPU Training</a>.</p>
 </div>
 <h2 id="net"><code>net</code><a class="headerlink" href="#net" title="Permanent link">&para;</a></h2>
 <p><code>create_net</code> resolves the triple and calls <code>type(**config)</code>. <code>config</code> is
-required. Container nets (<code>ClassifierNet</code>, <code>Segmenter</code>, <code>HeatmapDetector</code>)
+optional when the constructor needs no arguments. Container nets (<code>ClassifierNet</code>, <code>Segmenter</code>, <code>HeatmapDetector</code>)
 receive further triples as their config values and resolve them recursively.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">net</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.nets.classifier</span>
@@ -1663,7 +1697,7 @@ loader with <code>create_universal(cfg.weights_loader)</code> and calls
 <span class="nt">weights_loader</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.weightloaders.partial</span>
 <span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PartialWeightsLoader</span>
-<span class="w">  </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> strip_prefix</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;module.&quot;</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># optional</span>
+<span class="w">  </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> strip_prefix</span><span class="p">:</span><span class="w"> </span><span class="s">"module."</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># optional</span>
 </code></pre></div>
 <p><code>echelon3.weightloaders.basic.WeightsLoader</code> does a strict <code>load_state_dict</code>;
 <code>PartialWeightsLoader</code> loads only tensors whose name <strong>and</strong> shape match,
@@ -1674,17 +1708,18 @@ and a <code>test</code> entry, which may be <strong>either</strong> a single dat
 named datasets. Each dataset triple is instantiated with
 <code>type(**config, augment=..., preprocess=...)</code>, where the augment/preprocess come
 from the <code>transform</code> section (train transforms for <code>train</code>, test transforms for
-every <code>test</code> dataset).</p>
+every <code>test</code> dataset by default). Individual test datasets and multipart train
+parts may override either pipeline using a sibling <code>transform:</code> block (see below).</p>
 <p>Single test dataset:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">data</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">train</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.imageclassifier</span>
 <span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FoldersHiveImageClassifierDataset</span>
-<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/train</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;*.png&#39;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/train</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'*.png'</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <span class="w">  </span><span class="nt">test</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.imageclassifier</span>
 <span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FoldersHiveImageClassifierDataset</span>
-<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/test</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;*.png&#39;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/test</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'*.png'</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <p>Multiple named test datasets — <code>create_datasets</code> returns a <code>dict[name -&gt;
 Dataset]</code>, which the <code>Trainer</code> validates independently:</p>
@@ -1694,11 +1729,11 @@ Dataset]</code>, which the <code>Trainer</code> validates independently:</p>
 <span class="w">    </span><span class="nt">incidents</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.imageclassifier</span>
 <span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FoldersHiveImageClassifierDataset</span>
-<span class="w">      </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/incidents</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;*.png&#39;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">      </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/incidents</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'*.png'</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <span class="w">    </span><span class="nt">control</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.imageclassifier</span>
 <span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FoldersHiveImageClassifierDataset</span>
-<span class="w">      </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/control</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;*.png&#39;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">      </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">./data/control</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'*.png'</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">A test dataset is single vs. named by shape</p>
@@ -1751,6 +1786,69 @@ do <strong>not</strong> — their map key is only for readability.</p>
 <p>For detection, bbox-aware Compose is enabled by putting <code>bbox_params</code> under the
 purpose's <code>config</code>: <code>transform.train.config.bbox_params: { format: yolo,
 label_fields: [] }</code>.</p>
+<h3 id="per-dataset-transforms-since-0120">Per-dataset transforms (since 0.12.0)<a class="headerlink" href="#per-dataset-transforms-since-0120" title="Permanent link">&para;</a></h3>
+<p>Put <code>transform</code> <strong>beside</strong> <code>module</code>, <code>type</code>, and <code>config</code> in each test dataset spec,
+or in a <code>MultiPartDataset</code> part. The existing top-level <code>transform.train</code> and
+<code>transform.test</code> remain the common defaults. No <code>transform.test.datasets</code> mapping
+is used. A single non-multipart training dataset still uses <code>transform.train</code>.</p>
+<ul>
+<li>Missing <code>augment</code> inherits the common augmentation; missing <code>preprocess</code> inherits
+  the common preprocessing. The two keys override independently.</li>
+<li>A present chain replaces the entire common chain, in its listed order. Chains
+  are not concatenated and operations are not merged by name.</li>
+<li><code>augment: {}</code> (or <code>null</code>) removes common image operations but retains the automatic
+  <code>ToTensorV2</code>. <code>preprocess: {}</code> is an identity chain; <code>null</code> disables preprocessing.</li>
+<li>Omitting <code>transform</code>, or using <code>transform: {}</code>, inherits both common pipelines.</li>
+<li>Local augmentation inherits the common bbox format/label fields. To replace or
+  disable them, supply local <code>transform.config.bbox_params</code> (or <code>null</code>) together
+  with the local <code>augment</code> chain.</li>
+<li>The same resolver is used in initial/intermediate training validation, finetuning,
+  and standalone <code>evaluate</code>. The dataset applies preprocessing once; <code>PairEvaluator</code>
+  does not apply it again.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">transform</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">train</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">augment</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">flip</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> module</span><span class="p">:</span><span class="w"> </span><span class="nv">albumentations</span><span class="p p-Indicator">,</span><span class="nt"> type</span><span class="p">:</span><span class="w"> </span><span class="nv">HorizontalFlip</span><span class="p p-Indicator">,</span><span class="nt"> config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> p</span><span class="p">:</span><span class="w"> </span><span class="nv">0.5</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">preprocess</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">scale</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> module</span><span class="p">:</span><span class="w"> </span><span class="nv">echelon3.transforms.preprocess.basic</span><span class="p p-Indicator">,</span><span class="nt"> type</span><span class="p">:</span><span class="w"> </span><span class="nv">To01</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">scale</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">augment</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">resize</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> module</span><span class="p">:</span><span class="w"> </span><span class="nv">albumentations</span><span class="p p-Indicator">,</span><span class="nt"> type</span><span class="p">:</span><span class="w"> </span><span class="nv">Resize</span><span class="p p-Indicator">,</span><span class="nt"> config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> height</span><span class="p">:</span><span class="w"> </span><span class="nv">256</span><span class="p p-Indicator">,</span><span class="nt"> width</span><span class="p">:</span><span class="w"> </span><span class="nv">256</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">preprocess</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">scale</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> module</span><span class="p">:</span><span class="w"> </span><span class="nv">echelon3.transforms.preprocess.basic</span><span class="p p-Indicator">,</span><span class="nt"> type</span><span class="p">:</span><span class="w"> </span><span class="nv">To01</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">scale</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">train</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.basic</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MultiPartDataset</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">parts</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">source_a</span><span class="w">             </span><span class="c1"># optional; unique within this multipart dataset</span>
+<span class="w">          </span><span class="nt">share</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span>
+<span class="w">          </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_project.data</span>
+<span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Images</span>
+<span class="w">          </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> split</span><span class="p">:</span><span class="w"> </span><span class="nv">train_a</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">          </span><span class="nt">transform</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> augment</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># no random image operations; common preprocess</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">share</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.5</span><span class="w">                </span><span class="c1"># old unnamed parts remain supported</span>
+<span class="w">          </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_project.data</span>
+<span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Images</span>
+<span class="w">          </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> split</span><span class="p">:</span><span class="w"> </span><span class="nv">train_b</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="c1"># inherits both common train pipelines</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">standard</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_project.data</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Images</span>
+<span class="w">      </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> split</span><span class="p">:</span><span class="w"> </span><span class="nv">test_a</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">      </span><span class="c1"># inherits common resize and preprocessing</span>
+<span class="w">    </span><span class="nt">native_size</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_project.data</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Images</span>
+<span class="w">      </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> split</span><span class="p">:</span><span class="w"> </span><span class="nv">test_b</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">      </span><span class="nt">transform</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> augment</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">     </span><span class="c1"># original size, common preprocessing</span>
+</code></pre></div>
+<p>Multipart parts keep their list order and <code>share</code> sampling semantics. Names are
+optional non-empty, unique strings and are available as <code>dataset.part_names</code>
+(<code>None</code> for unnamed parts). A part can override transforms with or without a name.
+Use <code>MultiPartDataLoader</code> for the multipart train dataset and matching named test
+loaders as usual. Datasets still receive and must apply <code>augment</code>/<code>preprocess</code>.</p>
 <h2 id="loss"><code>loss</code><a class="headerlink" href="#loss" title="Permanent link">&para;</a></h2>
 <p>A <strong>list</strong> — each item is a single-key mapping <code>name -&gt; triple</code>. Beyond the
 usual <code>module</code>/<code>type</code>/<code>config</code>, each item requires a <code>weight</code>. <code>create_loss</code>
@@ -1816,7 +1914,7 @@ restricts the optimizer to parameters with <code>requires_grad=True</code>.</p>
 </code></pre></div>
 <h2 id="scheduler"><code>scheduler</code><a class="headerlink" href="#scheduler" title="Permanent link">&para;</a></h2>
 <p><code>create_scheduler</code> calls <code>type(optimizer=optimizer, **config)</code>. <code>config</code> is
-required (even if empty for a schedule with defaults). <code>scheduler.step()</code> is
+optional for a schedule with defaults. <code>scheduler.step()</code> is
 called once per epoch by the trainer.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">scheduler</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">torch.optim.lr_scheduler</span>
@@ -1848,10 +1946,6 @@ built-in <code>echelon3.trainers.baseline.Trainer</code> the useful <code>config
 <td>Validation passes per epoch (default 1).</td>
 </tr>
 <tr>
-<td><code>high_is_better</code></td>
-<td>Default direction when <code>keep_best_on</code> is a bare name (default <code>true</code>).</td>
-</tr>
-<tr>
 <td><code>float_labels</code></td>
 <td>Cast labels to float before the loss (default <code>false</code>).</td>
 </tr>
@@ -1865,22 +1959,24 @@ built-in <code>echelon3.trainers.baseline.Trainer</code> the useful <code>config
 </tr>
 </tbody>
 </table>
-<p><code>keep_best_on</code> accepts a bare metric name, a list, or a directional/tolerance
-mapping:</p>
+<p><code>keep_best_on</code> accepts a bare metric/loss name, a list, or a directional/tolerance
+mapping. A loss defaults to <code>low</code>, a metric to <code>high</code>; an explicit <code>direction</code> wins.
+The legacy <code>high_is_better</code> and <code>value</code> keys were removed in 0.11.0: delete
+<code>high_is_better</code>, replace directional <code>value</code> with <code>direction</code>, and tolerance
+<code>value</code> with <code>tolerance_value</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">trainer</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.trainers.baseline</span>
 <span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Trainer</span>
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">epochs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 <span class="w">    </span><span class="nt">times_to_validate_per_epoch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-<span class="w">    </span><span class="nt">high_is_better</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">    </span><span class="nt">keep_best_on</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">accuracy</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">directional</span><span class="w">    </span><span class="c1"># save when this metric moves the right way</span>
-<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span><span class="w">          </span><span class="c1"># high | low</span>
+<span class="w">        </span><span class="nt">direction</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span><span class="w">          </span><span class="c1"># high | low</span>
 <span class="w">      </span><span class="nt">accuracy_control</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tolerance</span><span class="w">      </span><span class="c1"># allow small regressions within a band</span>
-<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1%</span><span class="w">          </span><span class="c1"># absolute (0.001) or percent (&quot;0.1%&quot;)</span>
+<span class="w">        </span><span class="nt">tolerance_value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1%</span><span class="w">          </span><span class="c1"># relative fraction (0.001) or percent ("0.1%")</span>
 <span class="w">        </span><span class="nt">direction</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span>
 <span class="w">    </span><span class="nt">metrics_on</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">accuracy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">incidents</span>
@@ -1899,7 +1995,10 @@ saves rare (all of them must improve together on the same validation). For dict-
 </code></pre></div>
 <p><code>path</code> is the directory for <code>checkpoint-N.tar</code> files and TensorBoard events; it
 is also where the default logger writes. Training resumes automatically from the
-highest-numbered checkpoint found there.</p>
+highest-numbered checkpoint found there. <code>checkpoints_to_keep</code> must be a positive
+integer; omit it or use <code>null</code> to keep all checkpoints. After each successful save,
+the manager deletes older checkpoints beyond the limit. A failed save preserves
+previous checkpoints; merely opening a directory does not prune it.</p>
 <h2 id="mlops-optional"><code>mlops</code> (optional)<a class="headerlink" href="#mlops-optional" title="Permanent link">&para;</a></h2>
 <p>Omit it and echelon3 uses <code>echelon3.mlops.tensorboard.TensorboardLogger</code>, whose
 <code>folder</code> is set to <code>target.path</code>. Provide the section to swap loggers; the
@@ -1956,11 +2055,11 @@ under that entry point. See <a href="../../guide/extending/">Extending</a> for t
 <span class="w">  </span><span class="nt">strict</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">            </span><span class="c1"># tolerate missing/extra keys (default false)</span>
 
 <span class="nt">finetune</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">freeze_patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;backbone\.&#39;</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># freeze params whose dotted name matches</span>
+<span class="w">  </span><span class="nt">freeze_patterns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'backbone\.'</span><span class="p p-Indicator">]</span><span class="w">        </span><span class="c1"># freeze params whose dotted name matches</span>
 <span class="w">  </span><span class="nt">head_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                       </span><span class="c1"># or: train only the head</span>
 <span class="w">  </span><span class="nt">param_groups</span><span class="p">:</span><span class="w">                          </span><span class="c1"># per-layer LR multipliers</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;backbone\.&#39;</span><span class="p p-Indicator">,</span><span class="nt"> lr_mult</span><span class="p">:</span><span class="w"> </span><span class="nv">0.1</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;head\.&#39;</span><span class="p p-Indicator">,</span><span class="nt">     lr_mult</span><span class="p">:</span><span class="w"> </span><span class="nv">1.0</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> pattern</span><span class="p">:</span><span class="w"> </span><span class="s">'backbone\.'</span><span class="p p-Indicator">,</span><span class="nt"> lr_mult</span><span class="p">:</span><span class="w"> </span><span class="nv">0.1</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> pattern</span><span class="p">:</span><span class="w"> </span><span class="s">'head\.'</span><span class="p p-Indicator">,</span><span class="nt">     lr_mult</span><span class="p">:</span><span class="w"> </span><span class="nv">1.0</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <ul>
 <li><code>init_from.checkpoint</code> warm-starts the network's <code>state_dict</code> (the <code>module.</code>
@@ -1995,11 +2094,11 @@ section, runnable end to end (see <a href="../../getting-started/first-run/">Fir
 <span class="w">  </span><span class="nt">train</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.imageclassifier</span>
 <span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FoldersHiveImageClassifierDataset</span>
-<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">$</span><span class="p p-Indicator">{</span><span class="nv">oc.env</span><span class="p p-Indicator">:</span><span class="nv">SMOKE_DATA_ROOT</span><span class="p p-Indicator">,</span><span class="nv">./smoke_data</span><span class="p p-Indicator">}</span><span class="nv">/train</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;*.png&#39;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">$</span><span class="p p-Indicator">{</span><span class="nv">oc.env</span><span class="p p-Indicator">:</span><span class="nv">SMOKE_DATA_ROOT</span><span class="p p-Indicator">,</span><span class="nv">./smoke_data</span><span class="p p-Indicator">}</span><span class="nv">/train</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'*.png'</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <span class="w">  </span><span class="nt">test</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.data.imageclassifier</span>
 <span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FoldersHiveImageClassifierDataset</span>
-<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">$</span><span class="p p-Indicator">{</span><span class="nv">oc.env</span><span class="p p-Indicator">:</span><span class="nv">SMOKE_DATA_ROOT</span><span class="p p-Indicator">,</span><span class="nv">./smoke_data</span><span class="p p-Indicator">}</span><span class="nv">/test</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&#39;*.png&#39;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> classes</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> folder</span><span class="p">:</span><span class="w"> </span><span class="nv">$</span><span class="p p-Indicator">{</span><span class="nv">oc.env</span><span class="p p-Indicator">:</span><span class="nv">SMOKE_DATA_ROOT</span><span class="p p-Indicator">,</span><span class="nv">./smoke_data</span><span class="p p-Indicator">}</span><span class="nv">/test</span><span class="p p-Indicator">,</span><span class="nt"> wildcards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'*.png'</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
 
 <span class="nt">transform</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">train</span><span class="p">:</span>
@@ -2048,9 +2147,8 @@ section, runnable end to end (see <a href="../../getting-started/first-run/">Fir
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">epochs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
 <span class="w">    </span><span class="nt">keep_best_on</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">accuracy</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> mode</span><span class="p">:</span><span class="w"> </span><span class="nv">directional</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">high</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">      </span><span class="nt">accuracy</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> mode</span><span class="p">:</span><span class="w"> </span><span class="nv">directional</span><span class="p p-Indicator">,</span><span class="nt"> direction</span><span class="p">:</span><span class="w"> </span><span class="nv">high</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <span class="w">    </span><span class="nt">times_to_validate_per_epoch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-<span class="w">    </span><span class="nt">high_is_better</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 
 <span class="nt">target</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${oc.env:SMOKE_TARGET,./targets/smoke}</span>

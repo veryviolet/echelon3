@@ -1227,11 +1227,10 @@ sets (see the <a href="../../reference/config-schema/">config schema</a>), metri
 per set as <code>{set_name}/{metric}</code>.</p>
 <p>Checkpoints are saved based on <code>keep_best_on</code>. It can be:</p>
 <ul>
-<li>a single metric name (kept when it improves in the direction implied by
-  <code>high_is_better</code>),</li>
+<li>a single metric or loss name (metrics default to maximise, losses to minimise),</li>
 <li>a list of metric names,</li>
-<li>or a mapping with per-metric modes — <code>directional</code> (<code>value: high|low</code>) or
-  <code>tolerance</code> (only counts as improvement if it moves past a threshold).</li>
+<li>or a mapping with per-metric modes — <code>directional</code> (<code>direction: high|low</code>) or
+  <code>tolerance</code> (<code>tolerance_value</code>: permits a relative regression within the specified band).</li>
 </ul>
 <p>When several metrics are tracked they are combined with <strong>AND</strong> — there is no OR,
 weighted, or priority mode: a checkpoint is saved only on a validation where <strong>all</strong>
@@ -1244,11 +1243,10 @@ the most recent <code>target.checkpoints_to_keep</code> files.</p>
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">epochs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 <span class="w">    </span><span class="nt">times_to_validate_per_epoch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-<span class="w">    </span><span class="nt">high_is_better</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">    </span><span class="nt">keep_best_on</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">accuracy</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">directional</span>
-<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span>
+<span class="w">        </span><span class="nt">direction</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span>
 </code></pre></div>
 <h2 id="multi-gpu-and-logging">Multi-GPU and logging<a class="headerlink" href="#multi-gpu-and-logging" title="Permanent link">&para;</a></h2>
 <ul>

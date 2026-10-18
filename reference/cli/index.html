@@ -1409,7 +1409,7 @@ dotted paths into the config; values are typed with OmegaConf's grammar.</p>
 <code>+</code> just to introduce one (this removes the classic Hydra <code>+gpus</code> footgun). <code>+</code> /
 <code>++</code> are still accepted so existing command lines run unchanged.</p>
 <div class="highlight"><pre><span></span><code>echelon3<span class="w"> </span>train<span class="w"> </span>-cd<span class="w"> </span>configs<span class="w"> </span>-cn<span class="w"> </span>my_experiment<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>+trainer.config.compile<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\ </span><span class="w">     </span><span class="c1"># add a key that isn&#39;t in the file</span>
+<span class="w">    </span>+trainer.config.compile<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\ </span><span class="w">     </span><span class="c1"># add a key that isn't in the file</span>
 <span class="w">    </span>~scheduler<span class="w"> </span><span class="se">\ </span><span class="w">                       </span><span class="c1"># drop the scheduler section (→ constant LR)</span>
 <span class="w">    </span>~trainer.config.keep_best_on<span class="w">        </span><span class="c1"># drop a nested key</span>
 </code></pre></div>
@@ -1463,7 +1463,7 @@ Hydra run directory to configure.</p>
 <span class="nt">defaults</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">base_experiment</span><span class="w">      </span><span class="c1"># load base_experiment.yaml, merge at the root</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">net</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">resnet50</span><span class="w">        </span><span class="c1"># load net/resnet50.yaml, merge under the `net:` key</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span><span class="w">               </span><span class="c1"># then this file&#39;s own keys (wins over the above)</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span><span class="w">               </span><span class="c1"># then this file's own keys (wins over the above)</span>
 
 <span class="nt">trainer</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">config</span><span class="p">:</span>
