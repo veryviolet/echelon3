@@ -20,6 +20,8 @@ from echelon3.checkpoint.manager import (
     CHECKPOINT_METRICS_KEYWORD,
     CHECKPOINT_SCALER_KEYWORD,
     CHECKPOINT_GLOBAL_STEP_KEYWORD,
+    CHECKPOINT_BEST_METRICS_KEYWORD,
+    CHECKPOINT_SCHEDULER_STEPPED_KEYWORD,
 )
 
 from echelon3.mlops.basic import MLOpsLogger
@@ -309,6 +311,12 @@ class Trainer:
         self._best_metrics_all: Dict[str, float] | None = None
         # keep_best keys we already warned about being absent from the computed metrics
         self._warned_missing_keep_best: set = set()
+        self._save_last = kwargs.get('save_last', False)
+        self._resume_from = kwargs.get('resume_from', 'latest')
+        if not isinstance(self._save_last, bool):
+            raise ValueError('save_last must be a boolean')
+        if self._resume_from not in ('latest', 'last'):
+            raise ValueError("resume_from must be 'latest' (numbered checkpoint) or 'last'")
 
     def train(self):
 
@@ -316,31 +324,35 @@ class Trainer:
         self._ckpt_manager.init_storage()
 
         ckpts_idxs = self._ckpt_manager.idxs
-        if len(ckpts_idxs) == 0:
+        if len(ckpts_idxs) == 0 and self._resume_from != 'last':
             print(" Starting from scratch.")
             self._current_epoch = 1
             self._global_step = 0   # nothing trained yet — the initial baseline is step 0
             self.initialize_network()
         else:
             print(f" Found checkpoints {ckpts_idxs}")
-            print("--> Loading latest checkpoint... ", end="")
+            print(f"--> Loading {self._resume_from} checkpoint... ", end="")
             num_loaded = self.load_from_checkpoint()
             print(f" Loaded checkpoint {num_loaded}")
-            self.recalculate_start_of_epoch_global_step()
+            if self._resume_from != 'last':
+                self.recalculate_start_of_epoch_global_step()
             self.initialize_network()
 
-        # Initial validation BEFORE training — the same for scratch and for a checkpoint:
-        # this is the initial baseline (metrics at step 0 / of the loaded checkpoint), NOT
-        # a measurement after part of the first epoch. validate_and_check_for_saving() itself
-        # calls validate(), prints "Initial metrics baseline …" (best is still None) and
-        # saves the baseline checkpoint that further training must beat.
+        # Validate before training, at step 0 or the restored step. Scratch and
+        # numbered resume establish an initial best baseline; last resume keeps
+        # its saved best thresholds instead of promoting the resumed weights.
         #
         # The baseline records COMPLETED epochs: 0 for a fresh run, the loaded count on resume
         # (_current_epoch is the next epoch to run). So the step-0 checkpoint is `epoch=0`, no
         # longer colliding with the `epoch=1` one saved after the first real epoch.
         self._completed_epochs = self._current_epoch - 1
         self.prepare_network_for_validation()
-        self.validate_and_check_for_saving(initial=True)
+        if self._resume_from == 'last' and not self._reset:
+            # Re-evaluate the resumed weights, but do not promote last to a
+            # numbered checkpoint merely because a new process was started.
+            self.validate()
+        else:
+            self.validate_and_check_for_saving(initial=True)
         self.prepare_network_for_train()
 
         self._profiler = self._make_profiler()
@@ -357,6 +369,12 @@ class Trainer:
                     if ddp.is_main():
                         print("--> Profiler: window complete, stopping run (profile.stop_after).")
                     break
+                if self._save_last:
+                    # train_epoch has returned after its scheduler step. An
+                    # exception or profiling stop cannot overwrite the last
+                    # successfully completed epoch.
+                    self._completed_epochs = self._current_epoch
+                    self.save_last_checkpoint()
                 self._current_epoch += 1
         finally:
             if self._profiler is not None:
@@ -418,17 +436,26 @@ class Trainer:
     def save_checkpoint(self):
         if not ddp.is_main():
             return
-        self._ckpt_manager.save_checkpoint(
-            {
-                CHECKPOINT_EPOCH_KEYWORD: self._completed_epochs,
-                CHECKPOINT_GLOBAL_STEP_KEYWORD: self._global_step,
-                CHECKPOINT_MODEL_KEYWORD: ddp.state_dict_for_save(self._net),
-                CHECKPOINT_OPTIMIZER_KEYWORD: self._optimizer.state_dict(),
-                CHECKPOINT_SCHEDULER_KEYWORD: self._scheduler.state_dict() if self._scheduler is not None else None,
-                CHECKPOINT_METRICS_KEYWORD: self._metrics,
-                CHECKPOINT_SCALER_KEYWORD: self._scaler.state_dict(),
-            }
-        )
+        self._ckpt_manager.save_checkpoint(self._checkpoint_state())
+
+    def _checkpoint_state(self):
+        return {
+            CHECKPOINT_EPOCH_KEYWORD: self._completed_epochs,
+            CHECKPOINT_GLOBAL_STEP_KEYWORD: self._global_step,
+            CHECKPOINT_MODEL_KEYWORD: ddp.state_dict_for_save(self._net),
+            CHECKPOINT_OPTIMIZER_KEYWORD: self._optimizer.state_dict(),
+            CHECKPOINT_SCHEDULER_KEYWORD: self._scheduler.state_dict() if self._scheduler is not None else None,
+            CHECKPOINT_METRICS_KEYWORD: self._metrics,
+            CHECKPOINT_SCALER_KEYWORD: self._scaler.state_dict(),
+        }
+
+    def save_last_checkpoint(self):
+        if not ddp.is_main():
+            return
+        state = self._checkpoint_state()
+        state[CHECKPOINT_BEST_METRICS_KEYWORD] = self._best_metrics_all
+        state[CHECKPOINT_SCHEDULER_STEPPED_KEYWORD] = True
+        self._ckpt_manager.save_last_checkpoint(state)
 
     def recalculate_start_of_epoch_global_step(self):
         try:
@@ -447,16 +474,19 @@ class Trainer:
         return name in ("SAMOptimizer", "LBFGS")
 
     def close(self):
-        """Graceful shutdown: immediately kills the dataloader workers (persistent_workers
-        keep them alive between epochs), freeing /dev/shm and RAM on a clean exit,
-        without waiting for GC. Normally PDEATHSIG would kill them along with the process anyway."""
+        """Stop persistent DataLoader workers even while a traceback holds the iterator."""
         loaders = [self._train_loader] + list(self._test_loaders.values())
         for loader in loaders:
             try:
                 it = getattr(loader, "_iterator", None)
                 if it is not None:
+                    # Dropping loader._iterator is insufficient: an interrupted
+                    # next() or a caller can still hold it. Shut down and join the
+                    # workers before the CLI's hard exit, without relying on GC.
+                    shutdown = getattr(it, "_shutdown_workers", None)
+                    if callable(shutdown):
+                        shutdown()
                     loader._iterator = None
-                    del it
             except Exception:
                 pass
 
@@ -617,7 +647,8 @@ class Trainer:
         self._last_trained_batch = -1   # dedup guard for the "Trained …" line per epoch
 
         self.prepare_network_for_train()
-        self.recalculate_start_of_epoch_global_step()
+        if self._resume_from != 'last':
+            self.recalculate_start_of_epoch_global_step()
 
         for batch, (source, labels) in enumerate(self._train_loader):
 
@@ -1265,7 +1296,10 @@ class Trainer:
         print(Fore.CYAN, end="")
 
     def load_from_checkpoint(self):
-        ckpt, num = self._ckpt_manager.load_latest_checkpoint()
+        if self._resume_from == 'last':
+            ckpt, num = self._ckpt_manager.load_last_checkpoint(), 'last'
+        else:
+            ckpt, num = self._ckpt_manager.load_latest_checkpoint()
         # Strips the obsolete 'module.' prefix (old DataParallel/DDP checkpoints).
         ddp.load_state_dict_flexible(self._net, ckpt[CHECKPOINT_MODEL_KEYWORD])
 
@@ -1274,11 +1308,13 @@ class Trainer:
             self._current_epoch = 1
             self._global_step = 0
         else:
+            if self._resume_from == 'last':
+                self._best_metrics_all = ckpt.get(CHECKPOINT_BEST_METRICS_KEYWORD)
             new_format = CHECKPOINT_GLOBAL_STEP_KEYWORD in ckpt
             if new_format:
                 # New format (>= 0.10.7): stored `epoch` is COMPLETED epochs, so resume the
-                # NEXT one — a finished epoch N no longer re-runs. global_step is restored (and
-                # recomputed from the epoch by recalculate_start_of_epoch_global_step anyway).
+                # NEXT one — a finished epoch N no longer re-runs. Last resume keeps
+                # global_step verbatim; numbered resume retains its legacy recalculation.
                 self._current_epoch = int(ckpt[CHECKPOINT_EPOCH_KEYWORD]) + 1
                 self._global_step = int(ckpt[CHECKPOINT_GLOBAL_STEP_KEYWORD])
             else:
@@ -1293,7 +1329,7 @@ class Trainer:
             if self._scheduler is not None:
                 sched_state = ckpt.get(CHECKPOINT_SCHEDULER_KEYWORD) or self._scheduler.state_dict()
                 self._scheduler.load_state_dict(sched_state)
-                if new_format:
+                if new_format and not ckpt.get(CHECKPOINT_SCHEDULER_STEPPED_KEYWORD, False):
                     # An end-of-epoch checkpoint is saved BEFORE that epoch's scheduler.step()
                     # (step is at the end of train_epoch, after the save), so the stored
                     # scheduler lags the completed-epoch count by one. The old resume re-ran the

@@ -86,6 +86,22 @@ per rank.
 
 ## What each rank does
 
+### Fatal training errors
+
+An exception from `trainer.train()` (including a TensorBoard write failure)
+fails the job. The failed rank records the original exception for elastic and
+prints it to stderr before attempting worker cleanup. A failure in either
+diagnostic channel does not divert execution into normal process-group teardown.
+
+On POSIX, a 20-second kernel timer bounds the failed rank's reporting and cleanup,
+even if a native cleanup call holds the Python GIL. Normal cleanup exits sooner
+with status 1; the emergency timer terminates a stuck rank with SIGALRM. Elastic
+then stops and reaps its peers; total launcher exit time also includes elastic's
+polling and peer-shutdown timeout. The handler does not save or delete checkpoints
+and does not continue training without the logger.
+
+### Training and validation
+
 The network is wrapped in `DistributedDataParallel` (with
 `find_unused_parameters=True` by default; set
 `trainer.config.ddp_find_unused_parameters: false` when your graph uses every

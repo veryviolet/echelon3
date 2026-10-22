@@ -6,6 +6,7 @@ import torch
 
 CHECKPOINTS_PREFIX = 'checkpoint-'
 CHECKPOINTS_EXT = '.tar'
+LAST_CHECKPOINT = 'last.tar'
 
 class CheckpointManager:
 
@@ -71,6 +72,28 @@ class CheckpointManager:
     def save_checkpoint(self, ckpt: dict):
         new_number = max(self._idxs) + 1 if len(self._idxs) > 0 else 1
         destination = os.path.join(self._path, f'{CHECKPOINTS_PREFIX}{new_number}{CHECKPOINTS_EXT}')
+        self._save_atomic(ckpt, destination)
+        self._idxs.append(new_number)
+        if self._checkpoints_to_keep is not None:
+            for idx in sorted(self._idxs)[:-self._checkpoints_to_keep]:
+                os.remove(os.path.join(self._path, f'{CHECKPOINTS_PREFIX}{idx}{CHECKPOINTS_EXT}'))
+                self._idxs.remove(idx)
+
+    def save_last_checkpoint(self, ckpt: dict):
+        """Replace the completed-epoch snapshot independently of numbered checkpoints."""
+        self._save_atomic(ckpt, os.path.join(self._path, LAST_CHECKPOINT))
+
+    def load_last_checkpoint(self, cpu_only=False):
+        path = os.path.join(self._path, LAST_CHECKPOINT)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(
+                f'resume_from=last requires {path}; enable save_last for a completed epoch first'
+            )
+        device = torch.device('cpu') if cpu_only or not torch.cuda.is_available() else torch.device('cuda')
+        with open(path, 'rb') as f:
+            return torch.load(f, map_location=device, weights_only=False)
+
+    def _save_atomic(self, ckpt, destination):
         # Publish a complete checkpoint before pruning any previous good copies.
         temporary = None
         try:
@@ -81,11 +104,6 @@ class CheckpointManager:
         finally:
             if temporary is not None and os.path.exists(temporary):
                 os.remove(temporary)
-        self._idxs.append(new_number)
-        if self._checkpoints_to_keep is not None:
-            for idx in sorted(self._idxs)[:-self._checkpoints_to_keep]:
-                os.remove(os.path.join(self._path, f'{CHECKPOINTS_PREFIX}{idx}{CHECKPOINTS_EXT}'))
-                self._idxs.remove(idx)
 
     @property
     def path(self):
@@ -103,3 +121,5 @@ CHECKPOINT_SCHEDULER_KEYWORD = 'scheduler_state_dict'
 CHECKPOINT_METRICS_KEYWORD = 'metrics'
 CHECKPOINT_SCALER_KEYWORD = 'scaler_state_dict'
 CHECKPOINT_GLOBAL_STEP_KEYWORD = 'global_step'  # also marks the new epoch=completed format
+CHECKPOINT_BEST_METRICS_KEYWORD = 'best_metrics'
+CHECKPOINT_SCHEDULER_STEPPED_KEYWORD = 'scheduler_step_completed'

@@ -247,7 +247,7 @@ def _silence_sigint():
         pass
 
 
-def _close_quietly(trainer, timeout=15.0):
+def _close_quietly(trainer, timeout=15.0, *, finalize_multiprocessing=False):
     """Best-effort graceful teardown of DataLoader workers before exit: frees their
     semaphores and /dev/shm (otherwise, after a hard os._exit, PDEATHSIG-SIGKILL finishes them
     off without cleanup, and the launcher's resource_tracker reports "leaked semaphore objects").
@@ -255,7 +255,10 @@ def _close_quietly(trainer, timeout=15.0):
     We run it in a daemon thread with join(timeout): if close() hangs somewhere (e.g.
     _MultiProcessingDataLoaderIter._shutdown_workers waits on pin_memory_thread.join() WITHOUT
     a timeout), we won't delay the hard exit longer than timeout — the hung thread is finished
-    off by os._exit itself. Idempotent; we swallow errors."""
+    off by os._exit itself. Before a DDP hard exit, also run multiprocessing
+    finalizers: a traceback may still own an already-stopped iterator's queues
+    and semaphores, and os._exit skips their normal interpreter-exit cleanup.
+    Only enable this when the process is about to exit. We swallow errors."""
     import threading
 
     def _run():
@@ -263,7 +266,53 @@ def _close_quietly(trainer, timeout=15.0):
             trainer.close()
         except Exception:
             pass
+        finally:
+            if finalize_multiprocessing:
+                from multiprocessing.util import _run_finalizers
+                _run_finalizers()
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
     t.join(timeout)
+
+
+_FATAL_EXIT_TIMEOUT = 20.0
+
+
+def _exit_ddp_failure(trainer, exc):
+    """Report a fatal rank error, attempt cleanup, and always leave the rank.
+
+    On POSIX, a kernel timer bounds even cleanup that holds the GIL: Python
+    thread timeouts cannot recover control in that case. Arm it before any
+    diagnostics or cleanup, both of which can themselves fail (e.g. ENOSPC).
+    Elastic observes the failed rank and terminates/reaps the other ranks.
+    This function is terminal; it must never enter normal NCCL teardown.
+    """
+    import signal
+    import traceback
+    from echelon3 import ddp
+
+    _silence_sigint()
+    if hasattr(signal, 'setitimer'):
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        signal.setitimer(signal.ITIMER_REAL, _FATAL_EXIT_TIMEOUT)
+    try:
+        # Record before cleanup; if stderr also fails, elastic can still report
+        # the original exception. If the error file is on the full filesystem,
+        # stderr remains an independent diagnostic channel.
+        try:
+            from torch.distributed.elastic.multiprocessing.errors.handlers import get_error_handler
+            get_error_handler().record_exception(exc)
+        except Exception:
+            pass
+        try:
+            print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
+            traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+            sys.stderr.flush()
+        except Exception:
+            pass
+        _close_quietly(trainer, finalize_multiprocessing=True)
+    finally:
+        # A second exception must not unwind into trainer.close() or
+        # destroy_process_group(), which can wait forever on a failed peer.
+        os._exit(1)

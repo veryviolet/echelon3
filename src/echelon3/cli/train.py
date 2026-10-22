@@ -10,7 +10,7 @@ from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
 from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
-from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint
+from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint, _exit_ddp_failure
 from echelon3 import warncollect
 
 from echelon3.creator import create_datasets, create_augments, create_preprocesses, create_dataloaders, create_trainer
@@ -310,7 +310,7 @@ def _train(cfg: DictConfig):
         # finally, and PDEATHSIG finishes the workers off with SIGKILL without releasing
         # their semaphores — otherwise the launcher's resource_tracker complains about
         # "leaked semaphore objects" (a /dev/shm leak).
-        _close_quietly(trainer)
+        _close_quietly(trainer, finalize_multiprocessing=ddp.is_ddp())
         if ddp.is_ddp():
             os._exit(130)  # 128+SIGINT: hard exit → elastic reaps the peers
         raise SystemExit(130)
@@ -324,30 +324,17 @@ def _train(cfg: DictConfig):
             if ddp.is_main():
                 print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
                 sys.stderr.flush()
-            _close_quietly(trainer)
+            _close_quietly(trainer, finalize_multiprocessing=ddp.is_ddp())
             if ddp.is_ddp():
                 os._exit(130)
             raise SystemExit(130)
-        # We print the traceback to stderr BEFORE shutdown (stdout of non-main ranks is silenced).
+        if ddp.is_ddp():
+            _exit_ddp_failure(trainer, e)
+        # Non-DDP failures propagate after best-effort cleanup.
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
-        _close_quietly(trainer)  # release worker semaphores on the failure path too
-        if ddp.is_ddp():
-            # Record the real exception into the elastic error file so the launcher's summary
-            # surfaces THIS traceback (rank + message) instead of "<NO_OTHER_FAILURES> /
-            # exitcode 1" buried under interleaved rank output. Best-effort; no-op if not under
-            # the elastic launcher (TORCHELASTIC_ERROR_FILE unset).
-            try:
-                from torch.distributed.elastic.multiprocessing.errors.handlers import get_error_handler
-                get_error_handler().record_exception(e)
-            except Exception:
-                pass
-            # A clean destroy_process_group() can hang on the NCCL teardown while an
-            # unfinished collective is pending in the group (the crashed rank does not
-            # exit → a silent hang). A hard exit → the launcher reaps the peers.
-            sys.stderr.flush()
-            os._exit(1)
+        _close_quietly(trainer)
         raise
     finally:
         if ddp.is_main():

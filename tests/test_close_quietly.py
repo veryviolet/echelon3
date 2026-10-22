@@ -93,3 +93,32 @@ def test_close_quietly_calls_close_and_swallows_errors():
     _close_quietly(OkTrainer(), timeout=5.0)
     _close_quietly(BoomTrainer(), timeout=5.0)   # does not propagate
     assert calls == [1]
+
+
+@pytest.mark.parametrize('close_raises', [False, True])
+def test_hard_exit_finalizes_multiprocessing_after_close(monkeypatch, close_raises):
+    import multiprocessing.util
+    calls = []
+
+    class Trainer:
+        def close(self):
+            calls.append('close')
+            if close_raises:
+                raise RuntimeError('cleanup failed')
+
+    monkeypatch.setattr(multiprocessing.util, '_run_finalizers', lambda: calls.append('finalize'))
+    _close_quietly(Trainer(), finalize_multiprocessing=True)
+    assert calls == ['close', 'finalize']
+
+
+def test_normal_close_leaves_multiprocessing_finalizers_to_interpreter(monkeypatch):
+    import multiprocessing.util
+    calls = []
+
+    class Trainer:
+        def close(self):
+            calls.append('close')
+
+    monkeypatch.setattr(multiprocessing.util, '_run_finalizers', lambda: calls.append('finalize'))
+    _close_quietly(Trainer())
+    assert calls == ['close']

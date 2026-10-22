@@ -4,6 +4,25 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## 0.13.0 — 2026-10-22
+
+### Added
+
+- Opt-in `trainer.config.save_last` for an atomic `last.tar` snapshot after each
+  complete epoch, including optimizer, scheduler, scaler, epoch/step and best
+  thresholds. Explicit `resume_from: last` continues from that snapshot without
+  promoting it to best. Numbered retention and evaluate/export selection stay
+  unchanged; the default resume mode is still `latest`.
+
+### Fixed
+
+- Explicitly stop persistent DataLoader workers before DDP hard exit even when
+  an iterator is retained by a traceback; finalize multiprocessing resources to
+  release semaphores before exiting.
+- Bound fatal DDP rank cleanup on POSIX with a kernel deadline, including native
+  calls that hold the GIL. Preserve the original error before cleanup and always
+  exit the failed rank even if stderr or elastic error recording also fails.
+
 ## 0.12.0 — 2026-10-18
 
 ### Added

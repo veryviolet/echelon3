@@ -31,7 +31,7 @@ from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
 from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
-from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint
+from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint, _exit_ddp_failure
 from echelon3 import warncollect
 from echelon3.creator import (
     create_datasets, create_augments, create_preprocesses, create_dataloaders,
@@ -212,7 +212,7 @@ def _finetune(cfg: DictConfig):
             sys.stderr.flush()
         # Shut down DataLoader workers BEFORE os._exit (which skips finally): otherwise
         # PDEATHSIG-SIGKILL finishes them off without freeing semaphores -> "leaked semaphore objects".
-        _close_quietly(trainer)
+        _close_quietly(trainer, finalize_multiprocessing=ddp.is_ddp())
         if ddp.is_ddp():
             os._exit(130)  # 128+SIGINT: hard exit → elastic tears down the peers
         raise SystemExit(130)
@@ -224,26 +224,17 @@ def _finetune(cfg: DictConfig):
             if ddp.is_main():
                 print('\n--> Interrupted by user (Ctrl-C), shutting down.', file=sys.stderr)
                 sys.stderr.flush()
-            _close_quietly(trainer)
+            _close_quietly(trainer, finalize_multiprocessing=ddp.is_ddp())
             if ddp.is_ddp():
                 os._exit(130)
             raise SystemExit(130)
-        # Traceback to stderr (stdout of non-main ranks is silenced). Under DDP — a hard
-        # exit: destroy_process_group() may hang on NCCL teardown → a silent hang.
-        # os._exit → the launcher tears down the peers.
+        if ddp.is_ddp():
+            _exit_ddp_failure(trainer, e)
+        # Non-DDP failures propagate after best-effort cleanup.
         import traceback
         print(f'[rank {ddp.rank()}] trainer.train() failed:', file=sys.stderr)
         traceback.print_exc()
-        _close_quietly(trainer)  # free worker semaphores on the failure path too
-        if ddp.is_ddp():
-            # Surface the real traceback in the elastic failure summary (see cli/train.py).
-            try:
-                from torch.distributed.elastic.multiprocessing.errors.handlers import get_error_handler
-                get_error_handler().record_exception(e)
-            except Exception:
-                pass
-            sys.stderr.flush()
-            os._exit(1)
+        _close_quietly(trainer)
         raise
     finally:
         if ddp.is_main():

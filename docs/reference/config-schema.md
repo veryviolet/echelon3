@@ -369,6 +369,8 @@ built-in `echelon3.trainers.baseline.Trainer` the useful `config` keys are:
 | `times_to_validate_per_epoch` | Validation passes per epoch (default 1). |
 | `float_labels` | Cast labels to float before the loss (default `false`). |
 | `reset` | On resume, restart epoch/step counters instead of continuing. |
+| `save_last` | Save `target.path/last.tar` after each complete epoch (default `false`). |
+| `resume_from` | `latest` (default): highest numbered checkpoint; `last`: explicitly load `last.tar`. |
 | `metrics_on` | Map `metric_name -> test_dataset_name` for named test sets. |
 
 `keep_best_on` accepts a bare metric/loss name, a list, or a directional/tolerance
@@ -419,6 +421,49 @@ highest-numbered checkpoint found there. `checkpoints_to_keep` must be a positiv
 integer; omit it or use `null` to keep all checkpoints. After each successful save,
 the manager deletes older checkpoints beyond the limit. A failed save preserves
 previous checkpoints; merely opening a directory does not prune it.
+
+### Last completed epoch versus best weights
+
+For epoch-based trainers (`train` and `finetune`), enable an independent resume
+snapshot with `trainer.config.save_last: true`. After a complete epoch, including
+its scheduler step, Echelon3 atomically replaces `target.path/last.tar`. This
+snapshot contains model, optimizer, scheduler, scaler, completed epoch,
+`global_step`, and best-metric thresholds. An interrupted or profiling-shortened
+epoch does not replace it. Only rank 0 writes it under DDP.
+
+```yaml
+trainer:
+  module: echelon3.trainers.baseline
+  type: Trainer
+  config:
+    epochs: 30
+    keep_best_on: accuracy
+    save_last: true
+    # On a subsequent launch, explicitly resume the last completed epoch:
+    # resume_from: last
+```
+
+The first run can use the default `resume_from: latest`. To continue from last:
+
+```bash
+echelon3 train -cd configs -cn experiment trainer.config.resume_from=last
+# The same override is supported by finetune.
+```
+
+`resume_from: last` is strict: a missing `last.tar` raises an error, with no silent
+fallback to an older best checkpoint. Existing targets remain compatible through
+the default `latest` mode. A last-only target is also valid for explicit last
+resume. Resuming epoch N starts N+1 and preserves the saved global step, even if
+the configured batch size changes. `reset: true` still loads weights only and
+restarts optimizer/scheduler/counters according to the config.
+
+`last.tar` is excluded from numbered checkpoint discovery and retention; it never
+changes the default weight selection for evaluate/export. Resume from last keeps
+the previous best thresholds and does not save its initial validation as a new
+numbered checkpoint. Like existing snapshots, last does not persist RNG state or
+partially accumulated gradients; use an epoch length divisible by
+`grad_accum_steps` when continuing an accumulation run without discarding a
+partial window. Exact stochastic replay is not implied.
 
 ## `mlops` (optional)
 
