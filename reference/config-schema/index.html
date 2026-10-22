@@ -1069,6 +1069,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="target">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#last-completed-epoch-versus-best-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last completed epoch versus best weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1436,6 +1453,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="target">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#last-completed-epoch-versus-best-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last completed epoch versus best weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1954,6 +1988,14 @@ built-in <code>echelon3.trainers.baseline.Trainer</code> the useful <code>config
 <td>On resume, restart epoch/step counters instead of continuing.</td>
 </tr>
 <tr>
+<td><code>save_last</code></td>
+<td>Save <code>target.path/last.tar</code> after each complete epoch (default <code>false</code>).</td>
+</tr>
+<tr>
+<td><code>resume_from</code></td>
+<td><code>latest</code> (default): highest numbered checkpoint; <code>last</code>: explicitly load <code>last.tar</code>.</td>
+</tr>
+<tr>
 <td><code>metrics_on</code></td>
 <td>Map <code>metric_name -&gt; test_dataset_name</code> for named test sets.</td>
 </tr>
@@ -1999,6 +2041,40 @@ highest-numbered checkpoint found there. <code>checkpoints_to_keep</code> must b
 integer; omit it or use <code>null</code> to keep all checkpoints. After each successful save,
 the manager deletes older checkpoints beyond the limit. A failed save preserves
 previous checkpoints; merely opening a directory does not prune it.</p>
+<h3 id="last-completed-epoch-versus-best-weights">Last completed epoch versus best weights<a class="headerlink" href="#last-completed-epoch-versus-best-weights" title="Permanent link">&para;</a></h3>
+<p>For epoch-based trainers (<code>train</code> and <code>finetune</code>), enable an independent resume
+snapshot with <code>trainer.config.save_last: true</code>. After a complete epoch, including
+its scheduler step, Echelon3 atomically replaces <code>target.path/last.tar</code>. This
+snapshot contains model, optimizer, scheduler, scaler, completed epoch,
+<code>global_step</code>, and best-metric thresholds. An interrupted or profiling-shortened
+epoch does not replace it. Only rank 0 writes it under DDP.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">trainer</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echelon3.trainers.baseline</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Trainer</span>
+<span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">epochs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">    </span><span class="nt">keep_best_on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">accuracy</span>
+<span class="w">    </span><span class="nt">save_last</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="c1"># On a subsequent launch, explicitly resume the last completed epoch:</span>
+<span class="w">    </span><span class="c1"># resume_from: last</span>
+</code></pre></div>
+<p>The first run can use the default <code>resume_from: latest</code>. To continue from last:</p>
+<div class="highlight"><pre><span></span><code>echelon3<span class="w"> </span>train<span class="w"> </span>-cd<span class="w"> </span>configs<span class="w"> </span>-cn<span class="w"> </span>experiment<span class="w"> </span>trainer.config.resume_from<span class="o">=</span>last
+<span class="c1"># The same override is supported by finetune.</span>
+</code></pre></div>
+<p><code>resume_from: last</code> is strict: a missing <code>last.tar</code> raises an error, with no silent
+fallback to an older best checkpoint. Existing targets remain compatible through
+the default <code>latest</code> mode. A last-only target is also valid for explicit last
+resume. Resuming epoch N starts N+1 and preserves the saved global step, even if
+the configured batch size changes. <code>reset: true</code> still loads weights only and
+restarts optimizer/scheduler/counters according to the config.</p>
+<p><code>last.tar</code> is excluded from numbered checkpoint discovery and retention; it never
+changes the default weight selection for evaluate/export. Resume from last keeps
+the previous best thresholds and does not save its initial validation as a new
+numbered checkpoint. Like existing snapshots, last does not persist RNG state or
+partially accumulated gradients; use an epoch length divisible by
+<code>grad_accum_steps</code> when continuing an accumulation run without discarding a
+partial window. Exact stochastic replay is not implied.</p>
 <h2 id="mlops-optional"><code>mlops</code> (optional)<a class="headerlink" href="#mlops-optional" title="Permanent link">&para;</a></h2>
 <p>Omit it and echelon3 uses <code>echelon3.mlops.tensorboard.TensorboardLogger</code>, whose
 <code>folder</code> is set to <code>target.path</code>. Provide the section to swap loggers; the

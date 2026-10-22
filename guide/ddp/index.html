@@ -832,6 +832,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What each rank does">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fatal-training-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fatal training errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#training-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training and validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1160,6 +1188,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What each rank does">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fatal-training-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fatal training errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#training-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training and validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1296,6 +1352,18 @@ it keeps workers alive between epochs and raises the orphan risk on an unclean
 stop. Rule of thumb: <code>num_workers</code> per rank ≈ cores ÷ ranks.</p>
 </div>
 <h2 id="what-each-rank-does">What each rank does<a class="headerlink" href="#what-each-rank-does" title="Permanent link">&para;</a></h2>
+<h3 id="fatal-training-errors">Fatal training errors<a class="headerlink" href="#fatal-training-errors" title="Permanent link">&para;</a></h3>
+<p>An exception from <code>trainer.train()</code> (including a TensorBoard write failure)
+fails the job. The failed rank records the original exception for elastic and
+prints it to stderr before attempting worker cleanup. A failure in either
+diagnostic channel does not divert execution into normal process-group teardown.</p>
+<p>On POSIX, a 20-second kernel timer bounds the failed rank's reporting and cleanup,
+even if a native cleanup call holds the Python GIL. Normal cleanup exits sooner
+with status 1; the emergency timer terminates a stuck rank with SIGALRM. Elastic
+then stops and reaps its peers; total launcher exit time also includes elastic's
+polling and peer-shutdown timeout. The handler does not save or delete checkpoints
+and does not continue training without the logger.</p>
+<h3 id="training-and-validation">Training and validation<a class="headerlink" href="#training-and-validation" title="Permanent link">&para;</a></h3>
 <p>The network is wrapped in <code>DistributedDataParallel</code> (with
 <code>find_unused_parameters=True</code> by default; set
 <code>trainer.config.ddp_find_unused_parameters: false</code> when your graph uses every
