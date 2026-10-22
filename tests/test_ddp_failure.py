@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from test_ddp_interrupt import _session_processes
+from .test_ddp_interrupt import _session_processes
 
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='Linux process/signal regression')
