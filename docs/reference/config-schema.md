@@ -330,7 +330,9 @@ dataloaders:
 echelon3 also ships custom loaders you can drop in here — e.g.
 `echelon3.dataloaders.balance.BalancedDataLoader` for class-balanced batches.
 
-### Worker CPU affinity (unreleased)
+### Worker CPU affinity
+
+Available since 0.14.0.
 
 `dataloaders.*.config.worker_cpu_affinity` controls DataLoader worker placement
 independently of the training rank. Available for train, finetune, named test
