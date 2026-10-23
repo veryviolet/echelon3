@@ -896,6 +896,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#dataloader-cpu-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DataLoader CPU placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1252,6 +1263,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#dataloader-cpu-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DataLoader CPU placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1446,6 +1468,18 @@ model: watch for shape-driven recompiles, and closure optimizers like SAM.
 Worth checking a workload is actually launch-bound first (<code>nvidia-smi dmon -s
 pu</code>: power well under TDP ⇒ the GPU is starved, and <code>compile</code> is the lever).</p>
 </div>
+<h2 id="dataloader-cpu-placement">DataLoader CPU placement<a class="headerlink" href="#dataloader-cpu-placement" title="Permanent link">&para;</a></h2>
+<p>Available since 0.14.0.</p>
+<p><code>trainer.config.numa_affinity: true</code> pins ranks near their GPUs; false leaves
+placement untouched and does not restore an earlier CPU mask. Workers normally
+inherit their creating thread's affinity. To keep GPU-local ranks while allowing
+data loading across the launcher's CPU allocation, use
+<code>dataloaders.train.config.worker_cpu_affinity: launcher</code>. An explicit list selects
+a worker pool independently for each loader/job, with validation against the
+launcher allocation. See <a href="../../reference/config-schema/#worker-cpu-affinity">worker CPU affinity</a>
+for validation, named test loaders and external-launcher semantics.</p>
+<p>This is opt-in placement control, not a diagnosis of any observed affinity change
+or a guarantee of better throughput.</p>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../reference/config-schema/">Config Schema</a> — the <code>dataloaders</code>, <code>gpus</code>,

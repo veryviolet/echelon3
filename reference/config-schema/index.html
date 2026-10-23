@@ -1025,6 +1025,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="dataloaders">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worker-cpu-affinity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker CPU affinity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1409,6 +1426,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="dataloaders">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worker-cpu-affinity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker CPU affinity
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1937,6 +1971,47 @@ is the total across all GPUs. See <a href="../../guide/ddp/">Multi-GPU Training<
 </div>
 <p>echelon3 also ships custom loaders you can drop in here — e.g.
 <code>echelon3.dataloaders.balance.BalancedDataLoader</code> for class-balanced batches.</p>
+<h3 id="worker-cpu-affinity">Worker CPU affinity<a class="headerlink" href="#worker-cpu-affinity" title="Permanent link">&para;</a></h3>
+<p>Available since 0.14.0.</p>
+<p><code>dataloaders.*.config.worker_cpu_affinity</code> controls DataLoader worker placement
+independently of the training rank. Available for train, finetune, named test
+loaders and standalone evaluate on Linux:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">dataloaders</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">train</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">torch.utils.data</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DataLoader</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">32</span>
+<span class="w">      </span><span class="nt">num_workers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<span class="w">      </span><span class="nt">worker_cpu_affinity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">launcher</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">torch.utils.data</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DataLoader</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">32</span>
+<span class="w">      </span><span class="nt">num_workers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<span class="w">      </span><span class="nt">worker_cpu_affinity</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">3</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># example: must belong to your launcher mask</span>
+</code></pre></div>
+<ul>
+<li>Omitted or <code>null</code>: preserve inherited worker affinity (the existing default).</li>
+<li><code>launcher</code>: use all CPUs allowed at CLI entry, before CUDA/DDP initialization.
+  The built-in launcher passes that snapshot to every rank before rank-side NUMA
+  pinning. With external <code>torchrun</code>, the snapshot is each rank's entry mask; the
+  engine cannot recover a wider allocation already removed by the external launcher.</li>
+<li>A non-empty list of non-negative integer CPU IDs: use exactly that subset of
+  the launcher mask. Booleans, unavailable IDs and invalid values raise errors.
+  Duplicate IDs are harmless. All workers of that loader share the selected pool;
+  this does not automatically split CPUs between ranks or jobs. Set disjoint lists
+  in separate jobs when exclusive pools are desired, keeping SMT siblings together.</li>
+</ul>
+<p>The setting is validated when constructing loaders, even with <code>num_workers: 0</code>
+(where it has no placement effect). Affinity is set in worker-init before thread
+pool setup and before a user callback, for both fork and spawn workers. Rank and
+NCCL thread placement are unchanged. The kernel enforces cpuset/cgroup limits;
+a failure or silently reduced mask raises a worker error. A later change to a
+cgroup is not continuously monitored. Custom Python callbacks can subsequently
+change their own affinity. Direct Python creator calls use the calling thread's
+mask unless enclosed in an engine CLI entrypoint.</p>
 <h2 id="optimizer"><code>optimizer</code><a class="headerlink" href="#optimizer" title="Permanent link">&para;</a></h2>
 <p><code>create_optimizer</code> calls <code>type(params=net.parameters(), **config)</code>. <code>config</code> is
 optional. A special <code>trainable_only: true</code> key (popped before construction)
