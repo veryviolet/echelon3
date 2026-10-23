@@ -195,6 +195,20 @@ not iteration 1.
     Worth checking a workload is actually launch-bound first (`nvidia-smi dmon -s
     pu`: power well under TDP ⇒ the GPU is starved, and `compile` is the lever).
 
+## DataLoader CPU placement (unreleased)
+
+`trainer.config.numa_affinity: true` pins ranks near their GPUs; false leaves
+placement untouched and does not restore an earlier CPU mask. Workers normally
+inherit their creating thread's affinity. To keep GPU-local ranks while allowing
+data loading across the launcher's CPU allocation, use
+`dataloaders.train.config.worker_cpu_affinity: launcher`. An explicit list selects
+a worker pool independently for each loader/job, with validation against the
+launcher allocation. See [worker CPU affinity](../reference/config-schema.md#worker-cpu-affinity-unreleased)
+for validation, named test loaders and external-launcher semantics.
+
+This is opt-in placement control, not a diagnosis of any observed affinity change
+or a guarantee of better throughput.
+
 ## Next
 
 - [Config Schema](../reference/config-schema.md) — the `dataloaders`, `gpus`,

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sys
 import time
+from functools import partial
 
 import torch
 from omegaconf import OmegaConf
@@ -36,11 +37,19 @@ class ProbeLogger(_NullLogger):
         pass
 
 
+def mark_worker_ready(worker_id, *, original, folder):
+    original(worker_id)
+    write_report(folder, f'worker-ready-{os.getpid()}.json', {'pid': os.getpid()})
+
+
 class ProbeTrainer(Trainer):
     def __init__(self, report_dir, **kwargs):
         super().__init__(**kwargs)
         self.report_dir = report_dir
         self.retained_iterators = []
+        for loader in [self._train_loader, *self._test_loaders.values()]:
+            loader.worker_init_fn = partial(mark_worker_ready, original=loader.worker_init_fn,
+                                            folder=report_dir)
 
     def one_step_train(self, source, labels):
         super().one_step_train(source, labels)
@@ -51,6 +60,16 @@ class ProbeTrainer(Trainer):
             loaders = [self._train_loader, *self._test_loaders.values()]
             self.retained_iterators = [loader._iterator for loader in loaders]
             workers = [w for it in self.retained_iterators for w in it._workers]
+            # A tiny validation shard may only request data from worker 0.
+            # Worker 1 can still be importing modules when the first train batch
+            # arrives. This test targets initialized persistent workers, so wait
+            # for every initializer before allowing the controller to send SIGINT.
+            deadline = time.monotonic() + 60
+            while not all(Path(self.report_dir, f'worker-ready-{w.pid}.json').exists()
+                          for w in workers):
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Probe workers did not finish initialization')
+                time.sleep(0.02)
             write_report(self.report_dir, f'ready-{ddp.rank()}.json', {
                 'rank_pid': os.getpid(), 'worker_pids': [w.pid for w in workers],
                 'backend': torch.distributed.get_backend(),

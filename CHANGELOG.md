@@ -4,6 +4,16 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## Unreleased
+
+### Added
+
+- Opt-in `dataloaders.*.config.worker_cpu_affinity`: `launcher` restores the
+  original launcher CPU mask inside workers; an explicit CPU list selects a
+  subset of that mask. Rank placement and default worker inheritance are unchanged.
+  Applies to train, named validation loaders and standalone evaluate; invalid
+  allocations fail instead of silently falling back.
+
 ## 0.13.0 — 2026-10-22
 
 ### Added

@@ -9,6 +9,7 @@ from echelon3.checkpoint.manager import CHECKPOINT_MODEL_KEYWORD
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
+from echelon3.cpu_affinity import capture_launcher_affinity
 from echelon3.cli import add_cwd_to_sys_path, build_cli
 
 from echelon3.creator import (
@@ -49,6 +50,7 @@ def _resolve_test_sets(data_test, loaders_test):
     return [(n, data_test[n], loaders_test[n]) for n in names]
 
 
+@capture_launcher_affinity
 def evaluate_app(cfg: DictConfig):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

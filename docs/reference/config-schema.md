@@ -330,6 +330,50 @@ dataloaders:
 echelon3 also ships custom loaders you can drop in here — e.g.
 `echelon3.dataloaders.balance.BalancedDataLoader` for class-balanced batches.
 
+### Worker CPU affinity (unreleased)
+
+`dataloaders.*.config.worker_cpu_affinity` controls DataLoader worker placement
+independently of the training rank. Available for train, finetune, named test
+loaders and standalone evaluate on Linux:
+
+```yaml
+dataloaders:
+  train:
+    module: torch.utils.data
+    type: DataLoader
+    config:
+      batch_size: 32
+      num_workers: 4
+      worker_cpu_affinity: launcher
+  test:
+    module: torch.utils.data
+    type: DataLoader
+    config:
+      batch_size: 32
+      num_workers: 2
+      worker_cpu_affinity: [0, 1, 2, 3]  # example: must belong to your launcher mask
+```
+
+- Omitted or `null`: preserve inherited worker affinity (the existing default).
+- `launcher`: use all CPUs allowed at CLI entry, before CUDA/DDP initialization.
+  The built-in launcher passes that snapshot to every rank before rank-side NUMA
+  pinning. With external `torchrun`, the snapshot is each rank's entry mask; the
+  engine cannot recover a wider allocation already removed by the external launcher.
+- A non-empty list of non-negative integer CPU IDs: use exactly that subset of
+  the launcher mask. Booleans, unavailable IDs and invalid values raise errors.
+  Duplicate IDs are harmless. All workers of that loader share the selected pool;
+  this does not automatically split CPUs between ranks or jobs. Set disjoint lists
+  in separate jobs when exclusive pools are desired, keeping SMT siblings together.
+
+The setting is validated when constructing loaders, even with `num_workers: 0`
+(where it has no placement effect). Affinity is set in worker-init before thread
+pool setup and before a user callback, for both fork and spawn workers. Rank and
+NCCL thread placement are unchanged. The kernel enforces cpuset/cgroup limits;
+a failure or silently reduced mask raises a worker error. A later change to a
+cgroup is not continuously monitored. Custom Python callbacks can subsequently
+change their own affinity. Direct Python creator calls use the calling thread's
+mask unless enclosed in an engine CLI entrypoint.
+
 ## `optimizer`
 
 `create_optimizer` calls `type(params=net.parameters(), **config)`. `config` is

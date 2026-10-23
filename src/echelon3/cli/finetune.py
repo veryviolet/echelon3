@@ -30,6 +30,7 @@ import sys
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
+from echelon3.cpu_affinity import capture_launcher_affinity
 from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
 from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint, _exit_ddp_failure
 from echelon3 import warncollect
@@ -71,6 +72,7 @@ def _load_init_weights(net: torch.nn.Module, ckpt_path: str, strict: bool = Fals
     return len(new_sd) - len(missing)
 
 
+@capture_launcher_affinity
 def finetune_app(cfg: DictConfig):
     # Banner + Fore.CYAN — in the PARENT before the DDP launch (see trainer_app): banner first,
     # launcher messages inherit cyan. Spawned workers don't repeat the banner.
@@ -93,6 +95,7 @@ def _record_ddp_errors(fn):
 
 
 @_record_ddp_errors
+@capture_launcher_affinity
 def _finetune(cfg: DictConfig):
     setup_warnings()  # collect warnings, summary — before each validation
     _install_sigint_flag()  # flag Ctrl-C (to distinguish a worker death from OOM)

@@ -16,6 +16,7 @@ from omegaconf import OmegaConf, DictConfig, ListConfig
 
 from echelon3.checkpoint.manager import CheckpointManager
 from echelon3 import ddp
+from echelon3.cpu_affinity import resolve_worker_affinity, apply_worker_affinity
 
 PURPOSE_TRAIN = 'train'
 PURPOSE_TEST = 'test'
@@ -312,13 +313,14 @@ def create_single_dataloader(config: DictConfig, dataset):
     # TypeError) and use it to cap the workers' intra-op threads, so the `evaluate` path gets
     # the same oversubscription fix as `train` (see create_dataloaders / _pdeathsig_worker_init).
     threads = int(kwargs.pop('threads_per_worker', 1))
+    cpus = resolve_worker_affinity(kwargs.pop('worker_cpu_affinity', None))
     if int(kwargs.get('num_workers', 0) or 0) > 0:
-        kwargs['worker_init_fn'] = _worker_init_fn(kwargs.get('worker_init_fn'), threads)
+        kwargs['worker_init_fn'] = _worker_init_fn(kwargs.get('worker_init_fn'), threads, cpus)
     return dataloader_type(dataset=dataset, **kwargs)
 
 
 
-def _pdeathsig_worker_init(worker_id, _user_fn=None, _threads=1):
+def _pdeathsig_worker_init(worker_id, _user_fn=None, _threads=1, _cpus=None):
     """In the worker: cap intra-op threads, PDEATHSIG (dies together with its rank → won't be
     orphaned and won't hold /dev/shm/RAM), ignore SIGINT, then the user's worker_init_fn.
 
@@ -340,6 +342,7 @@ def _pdeathsig_worker_init(worker_id, _user_fn=None, _threads=1):
     IMPORTANT: this is a module-level function, NOT a closure — otherwise a DataLoader with
     ``multiprocessing_context='spawn'`` could not pickle it (regression 0.7.2)."""
     import signal
+    apply_worker_affinity(_cpus)
     n = max(1, int(_threads))
     try:
         torch.set_num_threads(n)
@@ -359,9 +362,10 @@ def _pdeathsig_worker_init(worker_id, _user_fn=None, _threads=1):
         _user_fn(worker_id)
 
 
-def _worker_init_fn(user_fn=None, threads_per_worker=1):
+def _worker_init_fn(user_fn=None, threads_per_worker=1, cpus=None):
     # partial of a module-level function — picklable (for spawn), unlike a closure.
-    return partial(_pdeathsig_worker_init, _user_fn=user_fn, _threads=threads_per_worker)
+    return partial(_pdeathsig_worker_init, _user_fn=user_fn, _threads=threads_per_worker,
+                   _cpus=cpus)
 
 
 def _resolve_collate(cfg: dict) -> dict:
@@ -444,8 +448,10 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
     # Pop threads_per_worker unconditionally (it is not a DataLoader kwarg, so it must never
     # reach the loader) — used only when there are workers to cap their intra-op threads.
     _train_threads = int(train_cfg.pop('threads_per_worker', 1))
+    _train_cpus = resolve_worker_affinity(train_cfg.pop('worker_cpu_affinity', None))
     if int(train_cfg.get('num_workers', 0) or 0) > 0:
-        train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'), _train_threads)
+        train_cfg['worker_init_fn'] = _worker_init_fn(train_cfg.get('worker_init_fn'), _train_threads,
+                                                    _train_cpus)
         # By default we keep workers alive between epochs. Otherwise they are respawned
         # every epoch, and Ctrl-C at an epoch boundary catches them mid-bootstrap (spawn:
         # import torch / pickle.load BEFORE our worker_init) — 4 KeyboardInterrupt tracebacks
@@ -476,8 +482,9 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
             if not isinstance(dataset, MultiPartDataset):     # MultiPart shards via its own batch_sampler
                 cfg['sampler'] = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False)
         _threads = int(cfg.pop('threads_per_worker', 1))   # never a DataLoader kwarg — see train
+        _cpus = resolve_worker_affinity(cfg.pop('worker_cpu_affinity', None))
         if int(cfg.get('num_workers', 0) or 0) > 0:
-            cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'), _threads)
+            cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'), _threads, _cpus)
             # We do NOT force persistent_workers for eval: validation is not a tight per-epoch
             # loop (the "Ctrl-C at an epoch boundary" motivation is weak here), and resident
             # eval workers alongside train workers for the whole run (default 4 under DDP)

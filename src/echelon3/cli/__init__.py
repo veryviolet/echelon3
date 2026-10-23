@@ -1,5 +1,8 @@
 import os
 import sys
+from echelon3.cpu_affinity import (
+    capture_launcher_affinity, launcher_cpus, run_with_launcher_affinity,
+)
 
 
 def setup_warnings():
@@ -81,6 +84,7 @@ def resolve_single_device(cfg, cuda_available: bool):
     return torch.device(dev)
 
 
+@capture_launcher_affinity
 def maybe_launch_ddp(cfg, train_fn) -> bool:
     """Built-in single-node DDP launcher (replacement for torchrun).
 
@@ -168,7 +172,8 @@ def maybe_launch_ddp(cfg, train_fn) -> bool:
     except Exception:
         pass
     try:
-        elastic_launch(launch_cfg, train_fn)(resolved)
+        elastic_launch(launch_cfg, run_with_launcher_affinity)(
+            train_fn, (resolved,), {}, launcher_cpus())
     except _interrupt:
         print('\n--> Interrupted by user (Ctrl-C), workers stopped.', file=sys.stderr)
         raise SystemExit(130)

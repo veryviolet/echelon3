@@ -9,6 +9,7 @@ from colorama import Fore, Style
 from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
+from echelon3.cpu_affinity import capture_launcher_affinity
 from echelon3.cli import add_cwd_to_sys_path, maybe_launch_ddp, setup_warnings, resolve_single_device, build_cli
 from echelon3.cli import _close_quietly, _looks_like_interrupt, _install_sigint_flag, _silence_sigint, _exit_ddp_failure
 from echelon3 import warncollect
@@ -25,6 +26,7 @@ def _is_estimator_cfg(cfg: DictConfig) -> bool:
     return 'model' in cfg.keys() and 'net' not in cfg.keys()
 
 
+@capture_launcher_affinity
 def trainer_app(cfg: DictConfig):
     # We print the banner + Fore.CYAN in the PARENT before the DDP launch: then it
     # comes BEFORE the launcher messages, which inherit cyan (colorama keeps the color
@@ -119,6 +121,7 @@ def _record_ddp_errors(fn):
 
 
 @_record_ddp_errors
+@capture_launcher_affinity
 def _train(cfg: DictConfig):
 
     setup_warnings()  # accumulate warnings, summary — before each validation
