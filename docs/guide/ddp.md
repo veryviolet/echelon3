@@ -80,9 +80,39 @@ per rank.
     Workers are reaped with their process (`PR_SET_PDEATHSIG` on Linux), so a
     crashed or `kill`ed run no longer leaves orphaned workers holding `/dev/shm`
     and RAM — the failure mode where a *new* run then hangs at the first batch.
-    Prefer `persistent_workers: false` unless dataset init is genuinely expensive;
-    it keeps workers alive between epochs and raises the orphan risk on an unclean
-    stop. Rule of thumb: `num_workers` per rank ≈ cores ÷ ranks.
+    Train loaders default to `persistent_workers: true` when `num_workers > 0`.
+    Test loaders preserve the configured value (PyTorch defaults to `false`).
+    Rule of thumb: `num_workers` per rank ≈ cores ÷ ranks.
+
+### Repeated validation startup
+
+Within a training run, validation reuses the model, datasets and DataLoader objects.
+With `persistent_workers: false`, each validation still creates new worker processes
+when it starts iterating the loader. The native DDP launcher uses `spawn`, so workers
+also pay Python imports and dataset deserialization again. The delay is visible before
+the first validation batch even on the second and later validation passes.
+
+For frequent validation, keep the test workers alive explicitly, for example:
+
+```yaml
+dataloaders:
+  test:
+    real:
+      module: torch.utils.data
+      type: DataLoader
+      config:
+        batch_size: 80
+        num_workers: 4
+        persistent_workers: true
+```
+
+This avoids repeated worker startup; it does not cache processed samples or model
+predictions. Workers and their dataset state remain in host RAM between validations,
+alongside train workers. Worker-local RNG/state also persists; deterministic evaluation
+should derive randomness from the sample rather than relying on worker reinitialization.
+Set this independently for each named test loader, and only with `num_workers > 0`.
+Separate invocations of `echelon3 evaluate` are new processes and rebuild their objects;
+worker persistence does not carry across CLI invocations.
 
 ## What each rank does
 

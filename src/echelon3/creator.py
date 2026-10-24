@@ -467,12 +467,10 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         cfg = OmegaConf.to_container(sub_cfg, resolve=True) if sub_cfg is not None else {}
         if ddp.is_ddp():
             # Symmetric validation: each rank computes its own shard, and metrics
-            # are aggregated by torchmetrics (dist_reduce_fx). Workers via spawn:
-            # without workers, eval
-            # prepares data on a single thread (minutes + every rank waits for the
-            # slowest one at the metric-sync barrier).
-            # fork workers: spawn can't pickle the dataset (cv2.CLAHE inside),
-            # while fork with NCCL is empirically safe — train loaders work this way.
+            # are aggregated by torchmetrics (dist_reduce_fx). Keep parallel data
+            # preparation; every rank waits for the slowest at metric synchronization.
+            # No multiprocessing context is forced here: PyTorch inherits the rank's
+            # context (spawn under the native launcher), unless configured explicitly.
             cfg['num_workers'] = min(int(cfg.get('num_workers', 4)), 4)
             cfg.pop('shuffle', None)
             # config batch_size is global (in DP it was split across cards by
@@ -485,10 +483,9 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         _cpus = resolve_worker_affinity(cfg.pop('worker_cpu_affinity', None))
         if int(cfg.get('num_workers', 0) or 0) > 0:
             cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'), _threads, _cpus)
-            # We do NOT force persistent_workers for eval: validation is not a tight per-epoch
-            # loop (the "Ctrl-C at an epoch boundary" motivation is weak here), and resident
-            # eval workers alongside train workers for the whole run (default 4 under DDP)
-            # hold RAM for nothing. The user can enable it manually if needed.
+            # Preserve the configured persistence policy. Frequent validation benefits
+            # from persistent_workers=True; False frees worker memory between passes
+            # but pays process startup again on every iteration, especially with spawn.
         _resolve_collate(cfg)
         return cfg
 

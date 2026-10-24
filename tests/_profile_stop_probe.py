@@ -1,5 +1,6 @@
 """Small native CLI profile probe; CPU/Gloo by default, no production data."""
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import sys
@@ -40,6 +41,7 @@ class ReportingTrainer(Trainer):
         rank = ddp.rank()
         super().close()
         report = {'rank_pid': os.getpid(), 'steps': self._global_step,
+                  'start_method': multiprocessing.get_start_method(),
                   'completed_epochs': self._completed_epochs,
                   'scheduler_epoch': self._scheduler.last_epoch,
                   'workers': [{'pid': w.pid, 'exitcode': w.exitcode, 'alive': w.is_alive()}
@@ -77,7 +79,7 @@ def main(folder, command):
     from echelon3.cli.train import _train, trainer_app
     from echelon3.cli.finetune import _finetune, finetune_app
     if native_gpus:
-        assert len(cfg.gpus) == 4 and len(set(cfg.gpus)) == 4
+        assert len(cfg.gpus) in (2, 4) and len(set(cfg.gpus)) == len(cfg.gpus)
         (trainer_app if command == 'train' else finetune_app)(cfg)
         return
     from torch.distributed.launcher.api import LaunchConfig, elastic_launch
