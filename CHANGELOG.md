@@ -4,6 +4,16 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## Unreleased
+
+### Fixed
+
+- `profile.stop_after` reports the batches actually trained, including the final
+  profiling step, and no longer advances the epoch scheduler on a partial epoch.
+- Normal profiling stops finish already-dispatched DataLoader prefetch without
+  scheduling the rest of the epoch, then join workers and check their exit codes.
+  Prefetch/worker failures propagate instead of being treated as a successful stop.
+
 ## 0.14.0 — 2026-10-24
 
 ### Added
