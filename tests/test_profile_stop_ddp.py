@@ -1,4 +1,4 @@
-"""Real 28-step profiling window on four ranks with persistent DataLoader workers."""
+"""Real 28-step profiling window with persistent DataLoader workers."""
 import json
 import os
 from pathlib import Path
@@ -14,9 +14,11 @@ from .test_ddp_interrupt import _session_processes
 
 @pytest.mark.skipif(sys.platform != 'linux', reason='Linux process cleanup check')
 @pytest.mark.parametrize('command', ['train', 'finetune'])
-def test_profile_stop_ddp4(tmp_path, command):
+def test_profile_stop_ddp(tmp_path, command):
     script = Path(__file__).with_name('_profile_stop_probe.py')
     env = dict(os.environ, OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1')
+    native_gpus = env.get('ECHELON3_PROFILE_TEST_GPUS')
+    world_size = len(native_gpus.split(',')) if native_gpus else 4
     if not env.get('ECHELON3_PROFILE_TEST_GPUS'):
         env['CUDA_VISIBLE_DEVICES'] = ''
     env['PYTHONPATH'] = os.pathsep.join([
@@ -31,7 +33,7 @@ def test_profile_stop_ddp4(tmp_path, command):
             assert process.returncode == 0, text
             assert '35% (28/80)' in text, text
             assert '100% (80/80)' not in text, text
-            for rank in range(4):
+            for rank in range(world_size):
                 report = json.loads((tmp_path / f'closed-{rank}.json').read_text())
                 assert report['steps'] == 28 and report['completed_epochs'] == 0, report
                 assert report['scheduler_epoch'] == 0, report
