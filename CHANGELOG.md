@@ -15,6 +15,11 @@ follow [SemVer](https://semver.org/) once 1.0.0 ships.
 - Built-in evaluators receive the CLI device before moving metrics or inputs;
   directly constructed evaluators infer the model device instead of forcing GPU 0.
   Custom evaluators with legacy constructor signatures remain supported.
+- `profile.stop_after` reports the batches actually trained, including the final
+  profiling step, and no longer advances the epoch scheduler on a partial epoch.
+- Normal profiling stops finish already-dispatched DataLoader prefetch without
+  scheduling the rest of the epoch, then join workers and check their exit codes.
+  Prefetch/worker failures propagate instead of being treated as a successful stop.
 
 ## 0.14.0 — 2026-10-24
 

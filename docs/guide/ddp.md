@@ -195,6 +195,20 @@ not iteration 1.
     Worth checking a workload is actually launch-bound first (`nvidia-smi dmon -s
     pu`: power well under TDP ⇒ the GPU is starved, and `compile` is the lever).
 
+## Profiling a short training window
+
+`trainer.config.profile: {wait: 20, warmup: 3, active: 5, stop_after: true}`
+stops after 28 training batches per rank. Only rank 0 records a trace unless
+`all_ranks: true` is configured, but every rank counts the same window.
+
+The summary reports the actual fraction of the epoch trained. A partial epoch
+does not advance the epoch scheduler or overwrite `last.tar`. On a normal profile
+stop, the engine finishes only the DataLoader batches already dispatched for
+prefetch (without training on them), then joins workers and checks their exit codes.
+It does not read the rest of the epoch. Errors during this cleanup remain errors;
+Ctrl-C and fatal-error cleanup keep their separate paths. These stop/cleanup fixes
+are currently unreleased.
+
 ## DataLoader CPU placement
 
 Available since 0.14.0.
