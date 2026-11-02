@@ -1,4 +1,5 @@
 import warnings
+from contextlib import nullcontext
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 import torch
@@ -10,7 +11,7 @@ from echelon3 import __title__, __version__
 from echelon3 import ddp
 from echelon3 import runtime
 from echelon3.cpu_affinity import capture_launcher_affinity
-from echelon3.cli import add_cwd_to_sys_path, build_cli
+from echelon3.cli import add_cwd_to_sys_path, build_cli, resolve_single_device
 
 from echelon3.creator import (
     create_universal,
@@ -53,7 +54,12 @@ def _resolve_test_sets(data_test, loaders_test):
 @capture_launcher_affinity
 def evaluate_app(cfg: DictConfig):
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # An explicit CPU run must not even probe CUDA. Bind the selected GPU before
+    # constructors or capability checks can allocate on the default device.
+    cpu_requested = str(cfg.get('device', '')).startswith('cpu')
+    device = resolve_single_device(cfg, False if cpu_requested else torch.cuda.is_available())
+    if device.type == 'cuda' and device.index is not None:
+        torch.cuda.set_device(device)
 
     print(Fore.CYAN)
     print(f"\n\n{__title__} {__version__}: pre-export evaluate.\n\n")
@@ -73,8 +79,11 @@ def evaluate_app(cfg: DictConfig):
 
     print(f"--> Loading latest checkpoint... ")
     print(Fore.LIGHTGREEN_EX, end="")
-    ckpt, num = ckpt_manager.load_latest_checkpoint()
+    # Checkpoints can contain optimizer state and tensors saved on another GPU.
+    # Deserialize on CPU, then copy only model weights into the selected net.
+    ckpt, num = ckpt_manager.load_latest_checkpoint(cpu_only=True)
     ddp.load_state_dict_flexible(net, ckpt[CHECKPOINT_MODEL_KEYWORD])
+    del ckpt
     if hasattr(net, "reread_hypers"):
         net.reread_hypers(**cfg.net.get('config', {}))
 
@@ -101,9 +110,10 @@ def evaluate_app(cfg: DictConfig):
 
     # TF32 + AMP inference: bf16 by default on supporting GPUs (precision: fp32 to disable).
     # autocast around the top-level call covers all Evaluators.
-    runtime.setup_fast_matmul(
-        tf32=cfg.get("tf32", True), cudnn_benchmark=cfg.get("cudnn_benchmark", True)
-    )
+    if device.type == 'cuda':
+        runtime.setup_fast_matmul(
+            tf32=cfg.get("tf32", True), cudnn_benchmark=cfg.get("cudnn_benchmark", True)
+        )
     _dtype = runtime.resolve_amp_dtype(cfg.get("precision", "auto"), device=device)
     print(f"--> Precision: {runtime.precision_label(_dtype)}")
 
@@ -147,10 +157,11 @@ def evaluate_app(cfg: DictConfig):
             metric=metric,
             preprocess=preprocess,
             postprocess=[],
+            device=device,
         )
 
         print(f"--> Evaluating{tag}... ")
-        with torch.autocast("cuda", dtype=_dtype or torch.bfloat16, enabled=_dtype is not None):
+        with (torch.autocast(device.type, dtype=_dtype) if _dtype is not None else nullcontext()):
             val_metric = evaluator.evaluate()
         print(Fore.LIGHTGREEN_EX, end="")
         print(f"Validation{tag} {cfg.evaluator.metric}: {val_metric}")

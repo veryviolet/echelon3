@@ -152,11 +152,23 @@ def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwarg
     return ds
 
 
-def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader, metric, preprocess, postprocess):
+def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader, metric,
+                     preprocess, postprocess, device=None):
     ev_type = get_attr_from_module(config.module, config.type)
+    kwargs = _cfg_kwargs(config)
+    if device is not None:
+        # Preserve custom evaluators with the legacy, closed constructor signature.
+        # Built-ins and extensible zoo evaluators receive the CLI device at construction,
+        # before they move their metric/model. Root device selection takes precedence.
+        import inspect
+        params = inspect.signature(ev_type).parameters
+        accepts_device = ('device' in params and
+                          params['device'].kind != inspect.Parameter.POSITIONAL_ONLY)
+        if accepts_device or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            kwargs['device'] = device
     # For the current classifiers we use only the validation (test) dataloader
     ev = ev_type(
-        **_cfg_kwargs(config),
+        **kwargs,
         net=net,
         dataloader=test_dataloader,
         metric=metric,

@@ -4,6 +4,18 @@ All notable changes to **echelon3** are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely; versions
 follow [SemVer](https://semver.org/) once 1.0.0 ships.
 
+## Unreleased
+
+### Fixed
+
+- Standalone `evaluate` honors root `device`/`gpus` before network construction.
+  Explicit CPU evaluation avoids CUDA probing and autocast; a selected GPU is bound
+  before constructors and AMP capability checks. Checkpoints deserialize on CPU,
+  including tensors saved on a different GPU, before model weights are copied.
+- Built-in evaluators receive the CLI device before moving metrics or inputs;
+  directly constructed evaluators infer the model device instead of forcing GPU 0.
+  Custom evaluators with legacy constructor signatures remain supported.
+
 ## 0.14.0 — 2026-10-24
 
 ### Added
