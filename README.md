@@ -69,6 +69,12 @@ echelon3 train -cd ./configs -cn my_run \
 
 `--config-dir`/`-cd` picks the directory, `--config-name`/`-cn` the YAML.
 
+Standalone `evaluate` (since 0.14.1) honors `device=cpu` without probing CUDA,
+or `device=cuda gpus=[6]` to select GPU 6 before constructing the network.
+It loads checkpoint tensors on CPU before copying weights to the selected device.
+Evaluation uses one GPU (`gpus[0]`), even when several are listed; indices refer
+to CUDA-visible devices. Built-in evaluators use that same device for metrics and inputs.
+
 ## Quick start
 
 `examples/` has self-contained smoke runs — a classifier, a CenterNet-style detector
