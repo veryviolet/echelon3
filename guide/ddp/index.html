@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -821,6 +821,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Batch size is global">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repeated-validation-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repeated validation startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -889,6 +906,17 @@
     <span class="md-ellipsis">
       
         torch.compile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profiling-a-short-training-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profiling a short training window
       
     </span>
   </a>
@@ -1188,6 +1216,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Batch size is global">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repeated-validation-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repeated validation startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1256,6 +1301,17 @@
     <span class="md-ellipsis">
       
         torch.compile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profiling-a-short-training-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profiling a short training window
       
     </span>
   </a>
@@ -1369,10 +1425,34 @@ process-group timeout backstop if a genuine desync should surface faster.</p>
 <p>Workers are reaped with their process (<code>PR_SET_PDEATHSIG</code> on Linux), so a
 crashed or <code>kill</code>ed run no longer leaves orphaned workers holding <code>/dev/shm</code>
 and RAM — the failure mode where a <em>new</em> run then hangs at the first batch.
-Prefer <code>persistent_workers: false</code> unless dataset init is genuinely expensive;
-it keeps workers alive between epochs and raises the orphan risk on an unclean
-stop. Rule of thumb: <code>num_workers</code> per rank ≈ cores ÷ ranks.</p>
+Train loaders default to <code>persistent_workers: true</code> when <code>num_workers &gt; 0</code>.
+Test loaders preserve the configured value (PyTorch defaults to <code>false</code>).
+Rule of thumb: <code>num_workers</code> per rank ≈ cores ÷ ranks.</p>
 </div>
+<h3 id="repeated-validation-startup">Repeated validation startup<a class="headerlink" href="#repeated-validation-startup" title="Permanent link">&para;</a></h3>
+<p>Within a training run, validation reuses the model, datasets and DataLoader objects.
+With <code>persistent_workers: false</code>, each validation still creates new worker processes
+when it starts iterating the loader. The native DDP launcher uses <code>spawn</code>, so workers
+also pay Python imports and dataset deserialization again. The delay is visible before
+the first validation batch even on the second and later validation passes.</p>
+<p>For frequent validation, keep the test workers alive explicitly, for example:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">dataloaders</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">real</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">module</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">torch.utils.data</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DataLoader</span>
+<span class="w">      </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">80</span>
+<span class="w">        </span><span class="nt">num_workers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
+<span class="w">        </span><span class="nt">persistent_workers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>This avoids repeated worker startup; it does not cache processed samples or model
+predictions. Workers and their dataset state remain in host RAM between validations,
+alongside train workers. Worker-local RNG/state also persists; deterministic evaluation
+should derive randomness from the sample rather than relying on worker reinitialization.
+Set this independently for each named test loader, and only with <code>num_workers &gt; 0</code>.
+Separate invocations of <code>echelon3 evaluate</code> are new processes and rebuild their objects;
+worker persistence does not carry across CLI invocations.</p>
 <h2 id="what-each-rank-does">What each rank does<a class="headerlink" href="#what-each-rank-does" title="Permanent link">&para;</a></h2>
 <h3 id="fatal-training-errors">Fatal training errors<a class="headerlink" href="#fatal-training-errors" title="Permanent link">&para;</a></h3>
 <p>An exception from <code>trainer.train()</code> (including a TensorBoard write failure)
@@ -1468,6 +1548,17 @@ model: watch for shape-driven recompiles, and closure optimizers like SAM.
 Worth checking a workload is actually launch-bound first (<code>nvidia-smi dmon -s
 pu</code>: power well under TDP ⇒ the GPU is starved, and <code>compile</code> is the lever).</p>
 </div>
+<h2 id="profiling-a-short-training-window">Profiling a short training window<a class="headerlink" href="#profiling-a-short-training-window" title="Permanent link">&para;</a></h2>
+<p><code>trainer.config.profile: {wait: 20, warmup: 3, active: 5, stop_after: true}</code>
+stops after 28 training batches per rank. Only rank 0 records a trace unless
+<code>all_ranks: true</code> is configured, but every rank counts the same window.</p>
+<p>The summary reports the actual fraction of the epoch trained. A partial epoch
+does not advance the epoch scheduler or overwrite <code>last.tar</code>. On a normal profile
+stop, the engine finishes only the DataLoader batches already dispatched for
+prefetch (without training on them), then joins workers and checks their exit codes.
+It does not read the rest of the epoch. Errors during this cleanup remain errors;
+Ctrl-C and fatal-error cleanup keep their separate paths. These stop/cleanup fixes
+are currently unreleased.</p>
 <h2 id="dataloader-cpu-placement">DataLoader CPU placement<a class="headerlink" href="#dataloader-cpu-placement" title="Permanent link">&para;</a></h2>
 <p>Available since 0.14.0.</p>
 <p><code>trainer.config.numa_affinity: true</code> pins ranks near their GPUs; false leaves
@@ -1537,10 +1628,10 @@ or a guarantee of better throughput.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>
