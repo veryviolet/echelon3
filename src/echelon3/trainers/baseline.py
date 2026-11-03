@@ -650,16 +650,17 @@ class Trainer:
         if self._resume_from != 'last':
             self.recalculate_start_of_epoch_global_step()
 
-        for batch, (source, labels) in enumerate(self._train_loader):
+        batches_done = 0
+        train_iterator = iter(self._train_loader)
+        for batch, (source, labels) in enumerate(train_iterator):
 
             source, labels = self.set_to_device(source, labels)
 
             self.one_step_train(source, labels)
 
             self._global_step += 1
+            batches_done += 1
             self._profiler_step()
-            if self._profile_stop_requested:
-                break   # dedicated profiling run: window done (see train())
 
             if self.losses_without_weights is not None:
                 train_progress.set_postfix(
@@ -669,6 +670,8 @@ class Trainer:
                     }
                 )
             train_progress.update(1)
+            if self._profile_stop_requested:
+                break   # dedicated profiling run: window done (see train())
 
             if (
                 (batch + 1 - (total_batches % self._times_to_validate_per_epoch)) != 0
@@ -706,9 +709,34 @@ class Trainer:
                     )
 
         train_progress.close()
-        self._log_trained(total_batches, total_batches)
+        self._log_trained(batches_done, total_batches)
+        if self._profile_stop_requested:
+            self._finish_profile_loader(train_iterator)
+            return
         if self._scheduler is not None:
             self._scheduler.step()
+
+    def _finish_profile_loader(self, iterator):
+        """Finish only in-flight prefetch before the normal profiling stop.
+
+        Immediate worker shutdown can leave multiprocessing queue feeder threads
+        serializing tensors as workers exit. Exhaust the already dispatched work
+        without scheduling the rest of the epoch, then join and verify workers.
+        This deliberately does not run on Ctrl-C or exception cleanup.
+        """
+        from torch.utils.data.dataloader import _MultiProcessingDataLoaderIter
+        if not isinstance(iterator, _MultiProcessingDataLoaderIter):
+            return
+        iterator._sampler_iter = iter(())
+        for _ in iterator:
+            pass
+        workers = list(iterator._workers)
+        iterator._shutdown_workers()
+        failed = [(w.pid, w.exitcode) for w in workers if w.is_alive() or w.exitcode != 0]
+        if failed:
+            raise RuntimeError(f'Profiler stop: DataLoader workers did not exit cleanly: {failed}')
+        if getattr(self._train_loader, '_iterator', None) is iterator:
+            self._train_loader._iterator = None
 
     def _log_trained(self, batches_done: int, total_batches: int):
         """Summary line for every closed train bar (it is leave=False, so it was erased):

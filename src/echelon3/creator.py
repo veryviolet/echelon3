@@ -152,11 +152,23 @@ def create_single_dataset(config: DictConfig, augment, preprocess, **extra_kwarg
     return ds
 
 
-def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader, metric, preprocess, postprocess):
+def create_evaluator(config: DictConfig, net, train_dataloader, test_dataloader, metric,
+                     preprocess, postprocess, device=None):
     ev_type = get_attr_from_module(config.module, config.type)
+    kwargs = _cfg_kwargs(config)
+    if device is not None:
+        # Preserve custom evaluators with the legacy, closed constructor signature.
+        # Built-ins and extensible zoo evaluators receive the CLI device at construction,
+        # before they move their metric/model. Root device selection takes precedence.
+        import inspect
+        params = inspect.signature(ev_type).parameters
+        accepts_device = ('device' in params and
+                          params['device'].kind != inspect.Parameter.POSITIONAL_ONLY)
+        if accepts_device or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            kwargs['device'] = device
     # For the current classifiers we use only the validation (test) dataloader
     ev = ev_type(
-        **_cfg_kwargs(config),
+        **kwargs,
         net=net,
         dataloader=test_dataloader,
         metric=metric,
@@ -467,12 +479,10 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         cfg = OmegaConf.to_container(sub_cfg, resolve=True) if sub_cfg is not None else {}
         if ddp.is_ddp():
             # Symmetric validation: each rank computes its own shard, and metrics
-            # are aggregated by torchmetrics (dist_reduce_fx). Workers via spawn:
-            # without workers, eval
-            # prepares data on a single thread (minutes + every rank waits for the
-            # slowest one at the metric-sync barrier).
-            # fork workers: spawn can't pickle the dataset (cv2.CLAHE inside),
-            # while fork with NCCL is empirically safe — train loaders work this way.
+            # are aggregated by torchmetrics (dist_reduce_fx). Keep parallel data
+            # preparation; every rank waits for the slowest at metric synchronization.
+            # No multiprocessing context is forced here: PyTorch inherits the rank's
+            # context (spawn under the native launcher), unless configured explicitly.
             cfg['num_workers'] = min(int(cfg.get('num_workers', 4)), 4)
             cfg.pop('shuffle', None)
             # config batch_size is global (in DP it was split across cards by
@@ -485,10 +495,9 @@ def create_dataloaders(config: DictConfig, train_dataset, test_dataset):
         _cpus = resolve_worker_affinity(cfg.pop('worker_cpu_affinity', None))
         if int(cfg.get('num_workers', 0) or 0) > 0:
             cfg['worker_init_fn'] = _worker_init_fn(cfg.get('worker_init_fn'), _threads, _cpus)
-            # We do NOT force persistent_workers for eval: validation is not a tight per-epoch
-            # loop (the "Ctrl-C at an epoch boundary" motivation is weak here), and resident
-            # eval workers alongside train workers for the whole run (default 4 under DDP)
-            # hold RAM for nothing. The user can enable it manually if needed.
+            # Preserve the configured persistence policy. Frequent validation benefits
+            # from persistent_workers=True; False frees worker memory between passes
+            # but pays process startup again on every iteration, especially with spawn.
         _resolve_collate(cfg)
         return cfg
 

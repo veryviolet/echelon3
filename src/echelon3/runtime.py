@@ -17,9 +17,8 @@ def resolve_amp_dtype(requested, device=None):
     on a box that also has a GPU) precision is always fp32.
     """
     req = str(requested).lower() if requested is not None else 'auto'
-    is_cuda = torch.cuda.is_available()
-    if device is not None:
-        is_cuda = is_cuda and ('cuda' in str(getattr(device, 'type', device)))
+    is_cuda = (device is None or 'cuda' in str(getattr(device, 'type', device)))
+    is_cuda = is_cuda and torch.cuda.is_available()
     bf16_ok = is_cuda and torch.cuda.is_bf16_supported()
 
     if req in ('fp32', 'float32', '32', 'none', 'off', 'false'):
